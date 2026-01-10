@@ -1,0 +1,20 @@
+{
+  "name": "dmarc-lens-infrastructure",
+  "version": "1.0.0",
+  "description": "AWS CDK infrastructure for DMARC Lens",
+  "main": "app.py",
+  "scripts": {
+    "cdk": "cdk",
+    "synth": "cdk synth",
+    "deploy": "cdk deploy",
+    "bootstrap": "cdk bootstrap",
+    "diff": "cdk diff",
+    "destroy": "cdk destroy"
+  },
+  "keywords": ["aws", "cdk", "dmarc", "serverless"],
+  "author": "DMARC Lens Team",
+  "license": "MIT",
+  "dependencies": {
+    "aws-cdk": "^2.1100.3"
+  }
+}

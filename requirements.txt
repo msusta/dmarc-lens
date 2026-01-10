@@ -1,0 +1,7 @@
+# Core dependencies for DMARC Lens
+aws-lambda-powertools>=2.0.0
+boto3>=1.26.0
+pydantic>=2.0.0
+python-dateutil>=2.8.0
+lxml>=4.9.0
+email-validator>=2.0.0
