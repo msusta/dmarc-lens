@@ -5,11 +5,16 @@ Main CDK stack for DMARC Lens infrastructure.
 from aws_cdk import (
     Stack,
     aws_s3 as s3,
+    aws_s3_notifications as s3_notifications,
     aws_lambda as _lambda,
+    aws_lambda_event_sources as lambda_event_sources,
     aws_dynamodb as dynamodb,
     aws_ses as ses,
     aws_ses_actions as ses_actions,
     aws_apigateway as apigateway,
+    aws_apigatewayv2 as apigatewayv2,
+    aws_apigatewayv2_integrations as apigatewayv2_integrations,
+    aws_apigatewayv2_authorizers as apigatewayv2_authorizers,
     aws_cognito as cognito,
     aws_cloudfront as cloudfront,
     aws_iam as iam,
@@ -45,8 +50,14 @@ class DmarcLensStack(Stack):
         # Create DynamoDB tables for reports and analysis
         self._create_dynamodb_tables()
         
+        # Create Lambda functions for processing
+        self._create_lambda_functions()
+        
         # Set up Cognito for user authentication
         self._create_cognito_authentication()
+        
+        # Create API Gateway and Lambda functions for data access
+        self._create_api_gateway()
 
     def _create_s3_buckets(self) -> None:
         """
@@ -98,15 +109,7 @@ class DmarcLensStack(Stack):
             bucket_name=f"dmarc-lens-web-{self.account}-{self.region}",
             encryption=s3.BucketEncryption.S3_MANAGED,
             versioned=True,
-            website_index_document="index.html",
-            website_error_document="error.html",
-            public_read_access=True,
-            block_public_access=s3.BlockPublicAccess(
-                block_public_acls=False,
-                block_public_policy=False,
-                ignore_public_acls=False,
-                restrict_public_buckets=False
-            ),
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,  # Keep private for now
             removal_policy=RemovalPolicy.DESTROY,  # Can be recreated
             lifecycle_rules=[
                 s3.LifecycleRule(
@@ -410,4 +413,285 @@ class DmarcLensStack(Stack):
             roles={
                 "authenticated": self.authenticated_role.role_arn
             }
+        )
+
+    def _create_lambda_functions(self) -> None:
+        """
+        Create Lambda functions for processing and analysis.
+        
+        Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5
+        - Create Report Parser Lambda function
+        - Create Analysis Engine Lambda function
+        - Set up S3 event notifications and DynamoDB streams
+        """
+        
+        # Report Parser Lambda Function
+        self.report_parser_lambda = _lambda.Function(
+            self,
+            "ReportParserFunction",
+            runtime=_lambda.Runtime.PYTHON_3_11,
+            handler="dmarc_lens.lambda_functions.report_parser.lambda_handler",
+            code=_lambda.Code.from_asset("../src"),
+            timeout=Duration.minutes(5),
+            memory_size=512,
+            environment={
+                "REPORTS_TABLE_NAME": self.reports_table.table_name,
+                "FAILED_REPORTS_TABLE_NAME": "dmarc-failed-reports",
+                "LOG_LEVEL": "INFO"
+            },
+            description="Processes DMARC report emails from S3 and stores parsed data in DynamoDB"
+        )
+        
+        # Grant permissions to Report Parser Lambda
+        self.raw_email_bucket.grant_read(self.report_parser_lambda)
+        self.reports_table.grant_write_data(self.report_parser_lambda)
+        
+        # Create failed reports table for error handling
+        self.failed_reports_table = dynamodb.Table(
+            self,
+            "FailedReportsTable",
+            table_name="dmarc-failed-reports",
+            partition_key=dynamodb.Attribute(
+                name="failure_id",
+                type=dynamodb.AttributeType.STRING
+            ),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            removal_policy=RemovalPolicy.RETAIN,
+            encryption=dynamodb.TableEncryption.AWS_MANAGED
+        )
+        
+        self.failed_reports_table.grant_write_data(self.report_parser_lambda)
+        
+        # Add S3 event notification to trigger Report Parser
+        self.raw_email_bucket.add_event_notification(
+            s3.EventType.OBJECT_CREATED,
+            s3_notifications.LambdaDestination(self.report_parser_lambda),
+            s3.NotificationKeyFilter(prefix="incoming/")
+        )
+        
+        # Analysis Engine Lambda Function
+        self.analysis_engine_lambda = _lambda.Function(
+            self,
+            "AnalysisEngineFunction",
+            runtime=_lambda.Runtime.PYTHON_3_11,
+            handler="dmarc_lens.lambda_functions.analysis_engine.lambda_handler",
+            code=_lambda.Code.from_asset("../src"),
+            timeout=Duration.minutes(2),
+            memory_size=256,
+            environment={
+                "ANALYSIS_TABLE_NAME": self.analysis_table.table_name,
+                "LOG_LEVEL": "INFO"
+            },
+            description="Analyzes DMARC report data and generates insights"
+        )
+        
+        # Grant permissions to Analysis Engine Lambda
+        self.reports_table.grant_read_data(self.analysis_engine_lambda)
+        self.analysis_table.grant_read_write_data(self.analysis_engine_lambda)
+        
+        # Add DynamoDB Stream event source to trigger Analysis Engine
+        self.analysis_engine_lambda.add_event_source(
+            lambda_event_sources.DynamoEventSource(
+                self.reports_table,
+                starting_position=_lambda.StartingPosition.LATEST,
+                batch_size=10,
+                max_batching_window=Duration.seconds(5),
+                retry_attempts=3
+            )
+        )
+
+    def _create_api_gateway(self) -> None:
+        """
+        Create API Gateway HTTP API with authentication and Lambda integrations.
+        
+        Requirements: 4.4, 6.3
+        - Set up HTTP API with Cognito JWT authorizer
+        - Configure CORS for web application access
+        - Implement rate limiting and throttling
+        """
+        
+        # Create HTTP API Gateway
+        self.http_api = apigatewayv2.HttpApi(
+            self,
+            "DmarcLensApi",
+            api_name="dmarc-lens-api",
+            description="DMARC Lens REST API for data access",
+            cors_preflight=apigatewayv2.CorsPreflightOptions(
+                allow_origins=["http://localhost:3000", "https://yourdomain.com"],  # Configure with actual domains
+                allow_methods=[
+                    apigatewayv2.CorsHttpMethod.GET,
+                    apigatewayv2.CorsHttpMethod.POST,
+                    apigatewayv2.CorsHttpMethod.PUT,
+                    apigatewayv2.CorsHttpMethod.DELETE,
+                    apigatewayv2.CorsHttpMethod.OPTIONS
+                ],
+                allow_headers=[
+                    "Content-Type",
+                    "Authorization",
+                    "X-Amz-Date",
+                    "X-Api-Key",
+                    "X-Amz-Security-Token"
+                ],
+                allow_credentials=True,
+                max_age=Duration.hours(1)
+            )
+        )
+
+        # Create JWT Authorizer using Cognito User Pool
+        self.jwt_authorizer = apigatewayv2_authorizers.HttpJwtAuthorizer(
+            "CognitoJwtAuthorizer",
+            jwt_audience=[self.user_pool_client.user_pool_client_id],
+            jwt_issuer=f"https://cognito-idp.{self.region}.amazonaws.com/{self.user_pool.user_pool_id}",
+            identity_source=["$request.header.Authorization"]
+        )
+
+        # Create throttling configuration
+        self.throttle_config = apigatewayv2.ThrottleConfig(
+            rate_limit=1000,  # requests per second
+            burst_limit=2000  # burst capacity
+        )
+
+        # Create default stage with throttling
+        self.api_stage = apigatewayv2.HttpStage(
+            self,
+            "DmarcLensApiStage",
+            http_api=self.http_api,
+            stage_name="prod",
+            auto_deploy=True,
+            throttle=self.throttle_config
+        )
+
+        # Store API endpoint for outputs
+        self.api_endpoint = self.http_api.api_endpoint
+        
+        # Create Lambda functions for API endpoints
+        self._create_api_lambda_functions()
+        
+        # Create API routes and integrations
+        self._create_api_routes()
+    def _create_api_lambda_functions(self) -> None:
+        """
+        Create Lambda functions for API endpoints.
+        
+        Requirements: 6.1, 6.2, 6.4
+        - Create Data API Lambda function
+        - Create Authentication Lambda function
+        - Grant necessary permissions
+        """
+        
+        # Data API Lambda Function
+        self.data_api_lambda = _lambda.Function(
+            self,
+            "DataApiFunction",
+            runtime=_lambda.Runtime.PYTHON_3_11,
+            handler="dmarc_lens.lambda_functions.data_api.lambda_handler",
+            code=_lambda.Code.from_asset("../src"),
+            timeout=Duration.seconds(30),
+            memory_size=256,
+            environment={
+                "REPORTS_TABLE_NAME": self.reports_table.table_name,
+                "ANALYSIS_TABLE_NAME": self.analysis_table.table_name,
+                "LOG_LEVEL": "INFO"
+            },
+            description="Provides REST API endpoints for DMARC data access"
+        )
+        
+        # Grant permissions to Data API Lambda
+        self.reports_table.grant_read_data(self.data_api_lambda)
+        self.analysis_table.grant_read_data(self.data_api_lambda)
+        
+        # Authentication Lambda Function (will be implemented in next subtask)
+        self.auth_lambda = _lambda.Function(
+            self,
+            "AuthFunction",
+            runtime=_lambda.Runtime.PYTHON_3_11,
+            handler="dmarc_lens.lambda_functions.auth.lambda_handler",
+            code=_lambda.Code.from_asset("../src"),
+            timeout=Duration.seconds(10),
+            memory_size=128,
+            environment={
+                "USER_POOL_ID": self.user_pool.user_pool_id,
+                "USER_POOL_CLIENT_ID": self.user_pool_client.user_pool_client_id,
+                "LOG_LEVEL": "INFO"
+            },
+            description="Handles JWT token validation and authorization"
+        )
+        
+        # Grant permissions to Authentication Lambda
+        self.auth_lambda.add_to_role_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "cognito-idp:GetUser",
+                    "cognito-idp:AdminGetUser",
+                    "cognito-idp:ListUsers"
+                ],
+                resources=[self.user_pool.user_pool_arn]
+            )
+        )
+
+    def _create_api_routes(self) -> None:
+        """
+        Create API Gateway routes and integrations.
+        
+        Requirements: 6.1, 6.2, 6.4
+        - Create routes for reports, analysis, and dashboard endpoints
+        - Configure Lambda integrations with authentication
+        - Set up proper HTTP methods and paths
+        """
+        
+        # Create Lambda integrations
+        data_api_integration = apigatewayv2_integrations.HttpLambdaIntegration(
+            "DataApiIntegration",
+            self.data_api_lambda
+        )
+        
+        auth_integration = apigatewayv2_integrations.HttpLambdaIntegration(
+            "AuthIntegration",
+            self.auth_lambda
+        )
+        
+        # Reports endpoints
+        self.http_api.add_routes(
+            path="/reports",
+            methods=[apigatewayv2.HttpMethod.GET],
+            integration=data_api_integration,
+            authorizer=self.jwt_authorizer
+        )
+        
+        self.http_api.add_routes(
+            path="/reports/{report_id}",
+            methods=[apigatewayv2.HttpMethod.GET],
+            integration=data_api_integration,
+            authorizer=self.jwt_authorizer
+        )
+        
+        # Analysis endpoints
+        self.http_api.add_routes(
+            path="/analysis/{domain}",
+            methods=[apigatewayv2.HttpMethod.GET],
+            integration=data_api_integration,
+            authorizer=self.jwt_authorizer
+        )
+        
+        # Dashboard endpoint
+        self.http_api.add_routes(
+            path="/dashboard",
+            methods=[apigatewayv2.HttpMethod.GET],
+            integration=data_api_integration,
+            authorizer=self.jwt_authorizer
+        )
+        
+        # Authentication endpoints (public)
+        self.http_api.add_routes(
+            path="/auth/validate",
+            methods=[apigatewayv2.HttpMethod.POST],
+            integration=auth_integration
+        )
+        
+        # Health check endpoint (public)
+        self.http_api.add_routes(
+            path="/health",
+            methods=[apigatewayv2.HttpMethod.GET],
+            integration=data_api_integration
         )

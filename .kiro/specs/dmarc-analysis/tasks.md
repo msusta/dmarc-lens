@@ -82,20 +82,20 @@ This implementation plan creates a serverless, AWS-native DMARC analysis platfor
     - **Property 7: Security Issue Detection**
     - **Validates: Requirements 3.1, 3.2, 3.3, 3.4, 3.5**
 
-- [ ] 5. Checkpoint - Ensure Lambda functions deploy and process test data
+- [x] 5. Checkpoint - Ensure Lambda functions deploy and process test data
   - Deploy Lambda functions to AWS
   - Test email ingestion with sample DMARC reports
   - Verify data flows through S3 → Lambda → DynamoDB
   - Ensure all tests pass, ask the user if questions arise
 
-- [ ] 6. Implement API Gateway and data access layer
-  - [ ] 6.1 Create API Gateway HTTP API with authentication
+- [x] 6. Implement API Gateway and data access layer
+  - [x] 6.1 Create API Gateway HTTP API with authentication
     - Set up HTTP API with Cognito JWT authorizer
     - Configure CORS for web application access
     - Implement rate limiting and throttling
     - _Requirements: 4.4, 6.3_
 
-  - [ ] 6.2 Implement Data API Lambda function
+  - [x] 6.2 Implement Data API Lambda function
     - Create endpoints for reports listing and details
     - Implement domain analysis data retrieval
     - Add dashboard summary data endpoint
@@ -110,32 +110,32 @@ This implementation plan creates a serverless, AWS-native DMARC analysis platfor
     - **Property 14: API Error Handling**
     - **Validates: Requirements 6.1, 6.2, 6.3, 6.4, 6.5**
 
-  - [ ] 6.4 Implement Authentication Lambda for JWT validation
+  - [x] 6.4 Implement Authentication Lambda for JWT validation
     - Create JWT token validation logic
     - Implement authorization checks for API endpoints
     - Handle token expiration and refresh scenarios
     - _Requirements: 4.3, 4.4, 4.5_
 
-  - [ ] 6.5 Write property tests for authentication
+  - [x] 6.5 Write property tests for authentication
     - **Property 8: Authentication and Authorization**
     - **Validates: Requirements 4.1, 4.2, 4.3, 4.4, 4.5**
 
-- [ ] 7. Create React web application
-  - [ ] 7.1 Set up React project with TypeScript and authentication
+- [x] 7. Create React web application
+  - [x] 7.1 Set up React project with TypeScript and authentication
     - Initialize React app with TypeScript template
     - Install and configure AWS Amplify for Cognito integration
     - Set up routing with React Router
     - Create authentication components (login, signup, logout)
     - _Requirements: 4.1, 4.2, 4.3_
 
-  - [ ] 7.2 Implement dashboard and data visualization components
+  - [x] 7.2 Implement dashboard and data visualization components
     - Create dashboard with DMARC activity summary
     - Build interactive charts using Recharts or Chart.js
     - Implement domain-specific analysis views
     - Add time period filtering and data refresh
     - _Requirements: 5.1, 5.2, 5.3, 5.4_
 
-  - [ ] 7.3 Create report listing and detail views
+  - [x] 7.3 Create report listing and detail views
     - Build report listing with search and filtering
     - Implement detailed report view with source IPs and results
     - Add export functionality for report data

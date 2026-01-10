@@ -1,0 +1,47 @@
+/* Remove default Create React App styles */
+.App {
+  text-align: left;
+}
+
+/* Custom styles for DMARC Lens */
+.MuiDrawer-paper {
+  background-color: #f5f5f5;
+}
+
+/* Amplify UI customizations */
+.amplify-authenticator {
+  --amplify-primary-color: #1976d2;
+  --amplify-primary-tint: #1976d2;
+  --amplify-primary-shade: #1565c0;
+}
+
+/* Chart container styles */
+.recharts-wrapper {
+  margin: 0 auto;
+}
+
+/* Loading states */
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 200px;
+}
+
+/* Error states */
+.error-container {
+  padding: 16px;
+  background-color: #ffebee;
+  border-radius: 4px;
+  color: #c62828;
+  margin: 16px 0;
+}
+
+/* Success states */
+.success-container {
+  padding: 16px;
+  background-color: #e8f5e8;
+  border-radius: 4px;
+  color: #2e7d32;
+  margin: 16px 0;
+}

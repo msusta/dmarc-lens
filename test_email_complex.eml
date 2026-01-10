@@ -1,0 +1,43 @@
+From: noreply@google.com
+To: dmarc-reports@yourdomain.com
+Subject: Report Domain: yourdomain.com Submitter: google.com Report-ID: 98765432109876543210
+Date: Fri, 10 Jan 2026 21:30:00 +0000
+Message-ID: <20260110213000.98765@google.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----=_NextPart_001_0002_01D2E8F1.98765432"
+
+This is a multi-part message in MIME format.
+
+------=_NextPart_001_0002_01D2E8F1.98765432
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+This is a DMARC aggregate report for yourdomain.com from Google.
+
+Report Details:
+- Domain: yourdomain.com
+- Submitter: google.com
+- Report ID: 98765432109876543210
+- Date Range: 2026-01-09 00:00:00 UTC to 2026-01-10 00:00:00 UTC
+
+This report contains multiple records with various authentication results.
+
+------=_NextPart_001_0002_01D2E8F1.98765432
+Content-Type: application/gzip
+Content-Disposition: attachment; filename="yourdomain.com!google.com!1736380800!1736467200.xml.gz"
+Content-Transfer-Encoding: base64
+
+H4sICCCyYmkAA2NvbXBsZXhfZG1hcmNfcmVwb3J0LnhtbADtV8ty2yAU3ecrPN4bJNlylA4hXbXT
+fbvWEIRsGgkooCT++4JAshLn4XHT6XO8MDr3wb2Ho8sIXd23zeyWacOluJynIJnPmKCy4mJzOf/y
++cOimF/hM1QzVl0TeoPPZjOkmZLali2zpCKWeMyhUm9KQVqGP0q5adjsk6AAwRENTqwlvMFCuhTN
+blG1RNOF6ZTP937TxwEqWwSDX4y5t5qUVApLqC25qCXeWqvMOwhjKNiHQgKJMHdMw2y1XudF4nId
+xofEsQ9e4YvifJ2vllma7FcI7u3B3zXLSk3EJnbjoGu24QKn58v1skiKxAUFZLAzUfXW1fo881b/
+HJLBh9nG3aasIiUbTnel6q4bbrZsLEQ6egTeyU6HZSAtwsFHYc2+MmoRVBExe8gMmKIWp74wvwgQ
+qW54izWCYRFBo+oe8/99uU+V5hilUg9Vank38mBcqZSVXOEsWYIEpOkSpK6OER4cqeyExascwbAa
+8LgduyVN54irBoNngxslDbdOwU5ZgjkiJsjEz7ejiDHOYewsMlNHQ2wvnNDTe7qTGhpDvGLC8pq7
+92cM2zJSMV3WWrYHJzS1xWQHKRDp7LbUzHSN3Wd9VPERCogS92lic/Fh0jdrnBykxsPCH8mAjTRM
+t0YTgt6mjAnnTl6PWvfOg6KOEVd6UYA8BU7RIH9eXdnyRHV964h7YS1/RWO1m13HaazviphpCgfZ
+nWK4lvqO6IpVCPbP+wj4MORv0mlg7qfp1F8q4DcSa+YmYQb6+fucVosTpTpM+lNkGgx/2ChsiauQ
+y84sThXacQr68V3eUkIJ8L/8BQGl+fr/Xfor7tLs1Rn1r9/pCI6fFd8BGL2ym4gMAAA=
+
+------=_NextPart_001_0002_01D2E8F1.98765432--
