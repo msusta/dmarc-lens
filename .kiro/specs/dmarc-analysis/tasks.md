@@ -147,14 +147,14 @@ This implementation plan creates a serverless, AWS-native DMARC analysis platfor
     - Test filtering and pagination functionality
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
 
-- [ ] 8. Set up monitoring and observability
-  - [ ] 8.1 Configure CloudWatch metrics and alarms
+- [ ]* 8. Set up monitoring and observability
+  - [ ]* 8.1 Configure CloudWatch metrics and alarms
     - Set up custom metrics for Lambda functions
     - Create alarms for error rates and performance
     - Configure log aggregation and retention
     - _Requirements: 7.4_
 
-  - [ ] 8.2 Implement SNS notifications for system errors
+  - [ ]* 8.2 Implement SNS notifications for system errors
     - Create SNS topics for different error types
     - Configure Lambda functions to send error notifications
     - Set up email or SMS alerts for critical issues
@@ -165,13 +165,13 @@ This implementation plan creates a serverless, AWS-native DMARC analysis platfor
     - **Validates: Requirements 7.4, 7.5**
 
 - [ ] 9. Deploy and configure production environment
-  - [ ] 9.1 Set up CloudFront distribution for web app
+  - [x] 9.1 Set up CloudFront distribution for web app
     - Configure CloudFront for S3 static website hosting
     - Set up custom domain and SSL certificate
     - Configure caching policies for optimal performance
     - _Requirements: 5.1, 5.2, 5.3_
 
-  - [ ] 9.2 Deploy complete infrastructure stack
+  - [x] 9.2 Deploy complete infrastructure stack
     - Deploy all CDK stacks to production AWS account
     - Configure environment-specific settings
     - Set up CI/CD pipeline for automated deployments

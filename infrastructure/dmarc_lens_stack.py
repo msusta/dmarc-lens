@@ -2,6 +2,8 @@
 Main CDK stack for DMARC Lens infrastructure.
 """
 
+import json
+import os
 from aws_cdk import (
     Stack,
     aws_s3 as s3,
@@ -17,9 +19,14 @@ from aws_cdk import (
     aws_apigatewayv2_authorizers as apigatewayv2_authorizers,
     aws_cognito as cognito,
     aws_cloudfront as cloudfront,
+    aws_cloudfront_origins as origins,
+    aws_certificatemanager as acm,
     aws_iam as iam,
+    aws_logs as logs,
     RemovalPolicy,
-    Duration
+    Duration,
+    CfnOutput,
+    Tags
 )
 from constructs import Construct
 
@@ -41,6 +48,13 @@ class DmarcLensStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
+        # Load environment configuration
+        self.env_name = self.node.try_get_context("environment") or "dev"
+        self.config = self._load_environment_config()
+        
+        # Apply tags to all resources
+        self._apply_tags()
+
         # Create S3 buckets for email storage and web hosting
         self._create_s3_buckets()
         
@@ -58,6 +72,31 @@ class DmarcLensStack(Stack):
         
         # Create API Gateway and Lambda functions for data access
         self._create_api_gateway()
+        
+        # Set up CloudFront distribution for web app
+        self._create_cloudfront_distribution()
+
+    def _load_environment_config(self) -> dict:
+        """Load environment-specific configuration from JSON file."""
+        config_path = os.path.join(
+            os.path.dirname(__file__), 
+            "environments", 
+            f"{self.env_name}.json"
+        )
+        
+        try:
+            with open(config_path, 'r') as f:
+                return json.load(f)
+        except FileNotFoundError:
+            raise ValueError(f"Environment configuration not found: {config_path}")
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON in environment configuration: {e}")
+
+    def _apply_tags(self) -> None:
+        """Apply environment-specific tags to all resources."""
+        tags = self.config.get("tags", {})
+        for key, value in tags.items():
+            Tags.of(self).add(key, value)
 
     def _create_s3_buckets(self) -> None:
         """
@@ -73,17 +112,17 @@ class DmarcLensStack(Stack):
         self.raw_email_bucket = s3.Bucket(
             self,
             "RawEmailBucket",
-            bucket_name=f"dmarc-lens-raw-emails-{self.account}-{self.region}",
+            bucket_name=f"dmarc-lens-raw-emails-{self.env_name}-{self.account}-{self.region}",
             encryption=s3.BucketEncryption.S3_MANAGED,
             versioned=True,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-            removal_policy=RemovalPolicy.RETAIN,
+            removal_policy=RemovalPolicy.RETAIN if self.env_name == "prod" else RemovalPolicy.DESTROY,
             lifecycle_rules=[
                 s3.LifecycleRule(
                     id="DeleteOldEmails",
                     enabled=True,
-                    expiration=Duration.days(365),  # Keep emails for 1 year
-                    noncurrent_version_expiration=Duration.days(30)
+                    expiration=Duration.days(365 if self.env_name == "prod" else 30),
+                    noncurrent_version_expiration=Duration.days(30 if self.env_name == "prod" else 7)
                 ),
                 s3.LifecycleRule(
                     id="TransitionToIA",
@@ -91,11 +130,11 @@ class DmarcLensStack(Stack):
                     transitions=[
                         s3.Transition(
                             storage_class=s3.StorageClass.INFREQUENT_ACCESS,
-                            transition_after=Duration.days(30)
+                            transition_after=Duration.days(30 if self.env_name == "prod" else 7)
                         ),
                         s3.Transition(
                             storage_class=s3.StorageClass.GLACIER,
-                            transition_after=Duration.days(90)
+                            transition_after=Duration.days(90 if self.env_name == "prod" else 14)
                         )
                     ]
                 )
@@ -106,10 +145,10 @@ class DmarcLensStack(Stack):
         self.web_hosting_bucket = s3.Bucket(
             self,
             "WebHostingBucket",
-            bucket_name=f"dmarc-lens-web-{self.account}-{self.region}",
+            bucket_name=f"dmarc-lens-web-{self.env_name}-{self.account}-{self.region}",
             encryption=s3.BucketEncryption.S3_MANAGED,
             versioned=True,
-            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,  # Keep private for now
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             removal_policy=RemovalPolicy.DESTROY,  # Can be recreated
             lifecycle_rules=[
                 s3.LifecycleRule(
@@ -150,19 +189,24 @@ class DmarcLensStack(Stack):
         self.receipt_rule_set = ses.ReceiptRuleSet(
             self,
             "DmarcReportsRuleSet",
-            receipt_rule_set_name="dmarc-reports-ruleset"
+            receipt_rule_set_name=f"dmarc-reports-ruleset-{self.env_name}"
         )
+
+        # Get email addresses from environment configuration
+        email_addresses = self.config.get("ses", {}).get("email_addresses", [])
+        if not email_addresses:
+            raise ValueError("No SES email addresses configured for environment")
 
         # Create SES receipt rule for DMARC reports
         self.receipt_rule = ses.ReceiptRule(
             self,
             "DmarcReportsRule",
             rule_set=self.receipt_rule_set,
-            receipt_rule_name="dmarc-reports-rule",
+            receipt_rule_name=f"dmarc-reports-rule-{self.env_name}",
             enabled=True,
             scan_enabled=True,  # Enable spam and virus scanning
             tls_policy=ses.TlsPolicy.REQUIRE,  # Require TLS
-            recipients=["dmarc-reports@yourdomain.com"],  # Configure with actual domain
+            recipients=email_addresses,
             actions=[
                 ses_actions.S3(
                     bucket=self.raw_email_bucket,
@@ -190,7 +234,7 @@ class DmarcLensStack(Stack):
         self.reports_table = dynamodb.Table(
             self,
             "ReportsTable",
-            table_name="dmarc-reports",
+            table_name=f"dmarc-reports-{self.env_name}",
             partition_key=dynamodb.Attribute(
                 name="report_id",
                 type=dynamodb.AttributeType.STRING
@@ -201,9 +245,9 @@ class DmarcLensStack(Stack):
             ),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             stream=dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,  # Enable streams for analysis
-            removal_policy=RemovalPolicy.RETAIN,  # Keep data for compliance
+            removal_policy=RemovalPolicy.RETAIN if self.env_name == "prod" else RemovalPolicy.DESTROY,
             point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
-                point_in_time_recovery_enabled=True
+                point_in_time_recovery_enabled=self.env_name == "prod"
             ),
             encryption=dynamodb.TableEncryption.AWS_MANAGED
         )
@@ -238,7 +282,7 @@ class DmarcLensStack(Stack):
         self.analysis_table = dynamodb.Table(
             self,
             "AnalysisTable",
-            table_name="dmarc-analysis",
+            table_name=f"dmarc-analysis-{self.env_name}",
             partition_key=dynamodb.Attribute(
                 name="domain",
                 type=dynamodb.AttributeType.STRING
@@ -248,9 +292,9 @@ class DmarcLensStack(Stack):
                 type=dynamodb.AttributeType.STRING
             ),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
-            removal_policy=RemovalPolicy.RETAIN,
+            removal_policy=RemovalPolicy.RETAIN if self.env_name == "prod" else RemovalPolicy.DESTROY,
             point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
-                point_in_time_recovery_enabled=True
+                point_in_time_recovery_enabled=self.env_name == "prod"
             ),
             encryption=dynamodb.TableEncryption.AWS_MANAGED
         )
@@ -282,7 +326,7 @@ class DmarcLensStack(Stack):
         self.user_pool = cognito.UserPool(
             self,
             "DmarcLensUserPool",
-            user_pool_name="dmarc-lens-users",
+            user_pool_name=f"dmarc-lens-users-{self.env_name}",
             self_sign_up_enabled=True,
             sign_in_aliases=cognito.SignInAliases(
                 email=True,
@@ -313,15 +357,19 @@ class DmarcLensStack(Stack):
                 require_symbols=True
             ),
             account_recovery=cognito.AccountRecovery.EMAIL_ONLY,
-            removal_policy=RemovalPolicy.RETAIN
+            removal_policy=RemovalPolicy.RETAIN if self.env_name == "prod" else RemovalPolicy.DESTROY
         )
+
+        # Get callback and logout URLs from environment configuration
+        callback_urls = self.config.get("cognito", {}).get("callback_urls", ["http://localhost:3000"])
+        logout_urls = self.config.get("cognito", {}).get("logout_urls", ["http://localhost:3000"])
 
         # Create User Pool Client for web application
         self.user_pool_client = cognito.UserPoolClient(
             self,
             "DmarcLensWebClient",
             user_pool=self.user_pool,
-            user_pool_client_name="dmarc-lens-web-client",
+            user_pool_client_name=f"dmarc-lens-web-client-{self.env_name}",
             generate_secret=False,  # Public client for SPA
             auth_flows=cognito.AuthFlow(
                 user_password=True,
@@ -339,8 +387,8 @@ class DmarcLensStack(Stack):
                     cognito.OAuthScope.OPENID,
                     cognito.OAuthScope.PROFILE
                 ],
-                callback_urls=["http://localhost:3000", "https://yourdomain.com"],  # Configure with actual domains
-                logout_urls=["http://localhost:3000", "https://yourdomain.com"]
+                callback_urls=callback_urls,
+                logout_urls=logout_urls
             ),
             supported_identity_providers=[
                 cognito.UserPoolClientIdentityProvider.COGNITO
@@ -356,7 +404,7 @@ class DmarcLensStack(Stack):
             "DmarcLensUserPoolDomain",
             user_pool=self.user_pool,
             cognito_domain=cognito.CognitoDomainOptions(
-                domain_prefix="dmarc-lens"  # Will be dmarc-lens.auth.region.amazoncognito.com
+                domain_prefix=f"dmarc-lens-{self.env_name}"
             )
         )
 
@@ -364,7 +412,7 @@ class DmarcLensStack(Stack):
         self.identity_pool = cognito.CfnIdentityPool(
             self,
             "DmarcLensIdentityPool",
-            identity_pool_name="dmarc-lens-identity-pool",
+            identity_pool_name=f"dmarc-lens-identity-pool-{self.env_name}",
             allow_unauthenticated_identities=False,
             cognito_identity_providers=[
                 cognito.CfnIdentityPool.CognitoIdentityProviderProperty(
@@ -436,10 +484,12 @@ class DmarcLensStack(Stack):
             memory_size=512,
             environment={
                 "REPORTS_TABLE_NAME": self.reports_table.table_name,
-                "FAILED_REPORTS_TABLE_NAME": "dmarc-failed-reports",
-                "LOG_LEVEL": "INFO"
+                "FAILED_REPORTS_TABLE_NAME": f"dmarc-failed-reports-{self.env_name}",
+                "LOG_LEVEL": "INFO" if self.env_name == "prod" else "DEBUG",
+                "ENVIRONMENT": self.env_name
             },
-            description="Processes DMARC report emails from S3 and stores parsed data in DynamoDB"
+            description=f"Processes DMARC report emails from S3 and stores parsed data in DynamoDB ({self.env_name})",
+            log_retention=logs.RetentionDays.ONE_MONTH if self.env_name == "prod" else logs.RetentionDays.ONE_WEEK
         )
         
         # Grant permissions to Report Parser Lambda
@@ -450,13 +500,13 @@ class DmarcLensStack(Stack):
         self.failed_reports_table = dynamodb.Table(
             self,
             "FailedReportsTable",
-            table_name="dmarc-failed-reports",
+            table_name=f"dmarc-failed-reports-{self.env_name}",
             partition_key=dynamodb.Attribute(
                 name="failure_id",
                 type=dynamodb.AttributeType.STRING
             ),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
-            removal_policy=RemovalPolicy.RETAIN,
+            removal_policy=RemovalPolicy.RETAIN if self.env_name == "prod" else RemovalPolicy.DESTROY,
             encryption=dynamodb.TableEncryption.AWS_MANAGED
         )
         
@@ -480,9 +530,11 @@ class DmarcLensStack(Stack):
             memory_size=256,
             environment={
                 "ANALYSIS_TABLE_NAME": self.analysis_table.table_name,
-                "LOG_LEVEL": "INFO"
+                "LOG_LEVEL": "INFO" if self.env_name == "prod" else "DEBUG",
+                "ENVIRONMENT": self.env_name
             },
-            description="Analyzes DMARC report data and generates insights"
+            description=f"Analyzes DMARC report data and generates insights ({self.env_name})",
+            log_retention=logs.RetentionDays.ONE_MONTH if self.env_name == "prod" else logs.RetentionDays.ONE_WEEK
         )
         
         # Grant permissions to Analysis Engine Lambda
@@ -514,10 +566,10 @@ class DmarcLensStack(Stack):
         self.http_api = apigatewayv2.HttpApi(
             self,
             "DmarcLensApi",
-            api_name="dmarc-lens-api",
-            description="DMARC Lens REST API for data access",
+            api_name=f"dmarc-lens-api-{self.env_name}",
+            description=f"DMARC Lens REST API for data access ({self.env_name})",
             cors_preflight=apigatewayv2.CorsPreflightOptions(
-                allow_origins=["http://localhost:3000", "https://yourdomain.com"],  # Configure with actual domains
+                allow_origins=self.config.get("api", {}).get("cors_origins", ["http://localhost:3000"]),
                 allow_methods=[
                     apigatewayv2.CorsHttpMethod.GET,
                     apigatewayv2.CorsHttpMethod.POST,
@@ -545,20 +597,19 @@ class DmarcLensStack(Stack):
             identity_source=["$request.header.Authorization"]
         )
 
-        # Create throttling configuration
-        self.throttle_config = apigatewayv2.ThrottleConfig(
-            rate_limit=1000,  # requests per second
-            burst_limit=2000  # burst capacity
-        )
+        ## Create throttling configuration
+        #self.throttle_config = apigatewayv2.ThrottleConfig(
+        #    rate_limit=1000,  # requests per second
+        #    burst_limit=2000  # burst capacity
+        #)
 
         # Create default stage with throttling
         self.api_stage = apigatewayv2.HttpStage(
             self,
             "DmarcLensApiStage",
             http_api=self.http_api,
-            stage_name="prod",
+            stage_name=self.env_name,
             auto_deploy=True,
-            throttle=self.throttle_config
         )
 
         # Store API endpoint for outputs
@@ -591,9 +642,11 @@ class DmarcLensStack(Stack):
             environment={
                 "REPORTS_TABLE_NAME": self.reports_table.table_name,
                 "ANALYSIS_TABLE_NAME": self.analysis_table.table_name,
-                "LOG_LEVEL": "INFO"
+                "LOG_LEVEL": "INFO" if self.env_name == "prod" else "DEBUG",
+                "ENVIRONMENT": self.env_name
             },
-            description="Provides REST API endpoints for DMARC data access"
+            description=f"Provides REST API endpoints for DMARC data access ({self.env_name})",
+            log_retention=logs.RetentionDays.ONE_MONTH if self.env_name == "prod" else logs.RetentionDays.ONE_WEEK
         )
         
         # Grant permissions to Data API Lambda
@@ -612,9 +665,11 @@ class DmarcLensStack(Stack):
             environment={
                 "USER_POOL_ID": self.user_pool.user_pool_id,
                 "USER_POOL_CLIENT_ID": self.user_pool_client.user_pool_client_id,
-                "LOG_LEVEL": "INFO"
+                "LOG_LEVEL": "INFO" if self.env_name == "prod" else "DEBUG",
+                "ENVIRONMENT": self.env_name
             },
-            description="Handles JWT token validation and authorization"
+            description=f"Handles JWT token validation and authorization ({self.env_name})",
+            log_retention=logs.RetentionDays.ONE_MONTH if self.env_name == "prod" else logs.RetentionDays.ONE_WEEK
         )
         
         # Grant permissions to Authentication Lambda
@@ -694,4 +749,212 @@ class DmarcLensStack(Stack):
             path="/health",
             methods=[apigatewayv2.HttpMethod.GET],
             integration=data_api_integration
+        )
+
+    def _create_cloudfront_distribution(self) -> None:
+        """
+        Set up CloudFront distribution for web app.
+        
+        Requirements: 5.1, 5.2, 5.3
+        - Configure CloudFront for S3 static website hosting
+        - Set up custom domain and SSL certificate
+        - Configure caching policies for optimal performance
+        """
+        
+        # Create S3 origin for the web hosting bucket
+        s3_origin = cloudfront.OriginAccessIdentity(
+            self,
+            "WebOriginAccessIdentity",
+            comment=f"Origin Access Identity for DMARC Lens web app ({self.env_name})"
+        )
+        
+        # Grant CloudFront access to S3 bucket
+        self.web_hosting_bucket.grant_read(s3_origin)
+        
+        # Get domain configuration
+        domain_config = self.config.get("domain", {})
+        domain_enabled = domain_config.get("enabled", False)
+        domain_name = domain_config.get("domain_name", "")
+        certificate_arn = domain_config.get("certificate_arn", "")
+        
+        # Configure domain names and certificate if enabled
+        viewer_certificate = None
+        if domain_enabled and domain_name and certificate_arn:
+            viewer_certificate = cloudfront.ViewerCertificate.from_acm_certificate(
+                acm.Certificate.from_certificate_arn(self, "Certificate", certificate_arn),
+                aliases=[domain_name],
+                ssl_method=cloudfront.SSLMethod.SNI,
+                security_policy=cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021
+            )
+        else:
+            viewer_certificate = cloudfront.ViewerCertificate.from_cloud_front_default_certificate()
+        
+        # Create API Gateway origin for API calls
+        api_domain = f"{self.http_api.http_api_id}.execute-api.{self.region}.amazonaws.com"
+        
+        # Create CloudFront distribution
+        self.cloudfront_distribution = cloudfront.CloudFrontWebDistribution(
+            self,
+            "WebDistribution",
+            comment=f"DMARC Lens web application distribution ({self.env_name})",
+            price_class=cloudfront.PriceClass.PRICE_CLASS_100,  # Use only North America and Europe
+            viewer_certificate=viewer_certificate,
+            
+            # Origin configurations
+            origin_configs=[
+                cloudfront.SourceConfiguration(
+                    s3_origin_source=cloudfront.S3OriginConfig(
+                        s3_bucket_source=self.web_hosting_bucket,
+                        origin_access_identity=s3_origin
+                    ),
+                    behaviors=[
+                        # Default behavior for HTML files
+                        cloudfront.Behavior(
+                            is_default_behavior=True,
+                            allowed_methods=cloudfront.CloudFrontAllowedMethods.GET_HEAD,
+                            cached_methods=cloudfront.CloudFrontAllowedCachedMethods.GET_HEAD,
+                            compress=True,
+                            viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+                            default_ttl=Duration.minutes(5),
+                            max_ttl=Duration.hours(1),
+                            min_ttl=Duration.seconds(0)
+                        ),
+                        # Static assets behavior
+                        cloudfront.Behavior(
+                            path_pattern="/static/*",
+                            allowed_methods=cloudfront.CloudFrontAllowedMethods.GET_HEAD,
+                            cached_methods=cloudfront.CloudFrontAllowedCachedMethods.GET_HEAD,
+                            compress=True,
+                            viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+                            default_ttl=Duration.days(30),
+                            max_ttl=Duration.days(365),
+                            min_ttl=Duration.seconds(0)
+                        )
+                    ]
+                ),
+                # API Gateway origin configuration
+                cloudfront.SourceConfiguration(
+                    custom_origin_source=cloudfront.CustomOriginConfig(
+                        domain_name=api_domain,
+                        origin_path=f"/{self.env_name}",
+                        http_port=80,
+                        https_port=443,
+                        origin_protocol_policy=cloudfront.OriginProtocolPolicy.HTTPS_ONLY
+                    ),
+                    behaviors=[
+                        cloudfront.Behavior(
+                            path_pattern="/api/*",
+                            allowed_methods=cloudfront.CloudFrontAllowedMethods.ALL,
+                            cached_methods=cloudfront.CloudFrontAllowedCachedMethods.GET_HEAD,
+                            compress=True,
+                            viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+                            default_ttl=Duration.seconds(0),  # Don't cache API responses
+                            max_ttl=Duration.seconds(0),
+                            min_ttl=Duration.seconds(0)
+                        )
+                    ]
+                )
+            ],
+            
+            # Error configurations for SPA routing
+            error_configurations=[
+                cloudfront.CfnDistribution.CustomErrorResponseProperty(
+                    error_code=404,
+                    response_code=200,
+                    response_page_path="/index.html",
+                    error_caching_min_ttl=300
+                ),
+                cloudfront.CfnDistribution.CustomErrorResponseProperty(
+                    error_code=403,
+                    response_code=200,
+                    response_page_path="/index.html",
+                    error_caching_min_ttl=300
+                )
+            ],
+            
+            # Default root object
+            default_root_object="index.html",
+            
+            # Enable logging
+            logging_config=cloudfront.LoggingConfiguration(
+                bucket=None,  # Will use default CloudFront logging
+                include_cookies=False,
+                prefix=f"dmarc-lens-access-logs-{self.env_name}/"
+            )
+        )
+        
+        # Store CloudFront domain name for outputs
+        self.cloudfront_domain_name = self.cloudfront_distribution.distribution_domain_name
+        
+        # Output the CloudFront distribution URL
+        website_url = f"https://{domain_name}" if domain_enabled and domain_name else f"https://{self.cloudfront_domain_name}"
+        CfnOutput(
+            self,
+            "WebsiteUrl",
+            value=website_url,
+            description="Website URL for the DMARC Lens application"
+        )
+        
+        # Output the CloudFront distribution URL
+        CfnOutput(
+            self,
+            "CloudFrontDistributionUrl",
+            value=f"https://{self.cloudfront_domain_name}",
+            description="CloudFront distribution URL for the web application"
+        )
+        
+        # Output the CloudFront distribution ID for deployment scripts
+        CfnOutput(
+            self,
+            "CloudFrontDistributionId",
+            value=self.cloudfront_distribution.distribution_id,
+            description="CloudFront distribution ID for cache invalidation"
+        )
+        
+        # Output the web hosting bucket name for deployment scripts
+        CfnOutput(
+            self,
+            "WebHostingBucketName",
+            value=self.web_hosting_bucket.bucket_name,
+            description="S3 bucket name for web hosting"
+        )
+        
+        # Output API Gateway endpoint for frontend configuration
+        CfnOutput(
+            self,
+            "ApiEndpoint",
+            value=f"{self.api_endpoint}/{self.env_name}",
+            description="API Gateway endpoint URL"
+        )
+        
+        # Output Cognito User Pool ID for frontend configuration
+        CfnOutput(
+            self,
+            "UserPoolId",
+            value=self.user_pool.user_pool_id,
+            description="Cognito User Pool ID"
+        )
+        
+        # Output Cognito User Pool Client ID for frontend configuration
+        CfnOutput(
+            self,
+            "UserPoolClientId",
+            value=self.user_pool_client.user_pool_client_id,
+            description="Cognito User Pool Client ID"
+        )
+        
+        # Output Cognito Identity Pool ID for frontend configuration
+        CfnOutput(
+            self,
+            "IdentityPoolId",
+            value=self.identity_pool.ref,
+            description="Cognito Identity Pool ID"
+        )
+        
+        # Output SES email addresses for configuration
+        CfnOutput(
+            self,
+            "SesEmailAddresses",
+            value=",".join(self.config.get("ses", {}).get("email_addresses", [])),
+            description="SES email addresses for DMARC report ingestion"
         )
