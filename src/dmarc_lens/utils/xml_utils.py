@@ -8,7 +8,7 @@ against the DMARC aggregate report schema.
 import xml.etree.ElementTree as ET
 import logging
 from typing import Optional, Dict, Any, List
-from datetime import datetime
+from datetime import datetime, timezone
 import re
 
 logger = logging.getLogger(__name__)
@@ -311,7 +311,7 @@ def extract_xml_timestamp(element: ET.Element, path: str) -> Optional[datetime]:
         timestamp_str = extract_xml_text(element, path)
         if timestamp_str:
             timestamp = int(timestamp_str)
-            return datetime.fromtimestamp(timestamp)
+            return datetime.fromtimestamp(timestamp, tz=timezone.utc)
         return None
     except (ValueError, OSError) as e:
         logger.warning(f"Failed to convert timestamp from {path}: {e}")

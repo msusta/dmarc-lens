@@ -204,8 +204,8 @@ class DMARCRecord:
                 raise ValueError("All SPF results must be AuthResult instances")
     
     def is_dmarc_aligned(self) -> bool:
-        """Check if this record passes DMARC alignment."""
-        return (self.policy_evaluated.dkim == 'pass' and 
+        """Check if this record passes DMARC alignment (DKIM or SPF must pass)."""
+        return (self.policy_evaluated.dkim == 'pass' or 
                 self.policy_evaluated.spf == 'pass')
     
     def get_authentication_summary(self) -> dict:

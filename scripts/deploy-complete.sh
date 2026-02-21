@@ -35,14 +35,17 @@ echo "  Account: $AWS_ACCOUNT"
 echo "  Region: $AWS_REGION"
 echo "  Environment: $ENVIRONMENT"
 
+# Resolve the project root directory
+SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
 # Step 1: Deploy Infrastructure
 echo ""
 echo "=========================================="
 echo "Step 1: Deploying Infrastructure"
 echo "=========================================="
 
-cd infrastructure
-./deploy.sh $ENVIRONMENT
+"$SCRIPT_DIR/deploy.sh" $ENVIRONMENT
 
 if [ $? -ne 0 ]; then
     echo "Error: Infrastructure deployment failed"
@@ -57,8 +60,7 @@ echo "=========================================="
 echo "Step 2: Deploying Web Application"
 echo "=========================================="
 
-cd ../scripts
-./deploy-web.sh $ENVIRONMENT
+"$SCRIPT_DIR/deploy-web.sh" $ENVIRONMENT
 
 if [ $? -ne 0 ]; then
     echo "Error: Web application deployment failed"

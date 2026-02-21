@@ -10,7 +10,7 @@ import json
 import logging
 import boto3
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 from botocore.exceptions import ClientError
 
@@ -36,8 +36,9 @@ s3_client = boto3.client('s3')
 dynamodb = boto3.resource('dynamodb')
 
 # Environment variables (set by CDK)
-REPORTS_TABLE_NAME = 'dmarc-reports'  # Will be overridden by environment
-FAILED_REPORTS_TABLE_NAME = 'dmarc-failed-reports'  # Will be overridden by environment
+import os
+REPORTS_TABLE_NAME = os.getenv('REPORTS_TABLE_NAME', 'dmarc-reports')
+FAILED_REPORTS_TABLE_NAME = os.getenv('FAILED_REPORTS_TABLE_NAME', 'dmarc-failed-reports')
 
 
 class ReportProcessingError(Exception):
@@ -395,7 +396,7 @@ def store_dmarc_report(report: DMARCReport, email_metadata: Dict[str, Any],
                 'dkim_result': record.policy_evaluated.dkim,
                 'spf_result': record.policy_evaluated.spf,
                 'header_from': record.header_from,
-                'created_at': int(datetime.utcnow().timestamp()),
+                'created_at': int(datetime.now(timezone.utc).timestamp()),
                 's3_key': s3_key,
                 'filename': filename,
                 'email_from': email_metadata.get('from', ''),
@@ -458,7 +459,7 @@ def store_failed_report(filename: str, xml_content: str, error_message: str,
             'email_subject': email_metadata.get('subject', ''),
             'email_date': email_metadata.get('date', ''),
             's3_key': s3_key,
-            'failed_at': int(datetime.utcnow().timestamp()),
+            'failed_at': int(datetime.now(timezone.utc).timestamp()),
             'processed': False
         }
         

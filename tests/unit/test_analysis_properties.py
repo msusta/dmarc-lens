@@ -109,7 +109,7 @@ class TestAuthenticationSuccessRateCalculation:
         
         dmarc_aligned_messages = sum(
             int(record['count']) for record in records
-            if record['dkim_result'] == 'pass' and record['spf_result'] == 'pass'
+            if record['dkim_result'] == 'pass' or record['spf_result'] == 'pass'
         )
         
         dkim_pass_messages = sum(
@@ -293,9 +293,9 @@ class TestAnalysisDataCompleteness:
         total_failures = failure_analysis['total_failing_messages']
         assert total_failures <= total_from_auth
         
-        # Success + failure counts should be logical
+        # Success count should not exceed total
         success_messages = auth_stats['dmarc_aligned_messages']
-        assert success_messages + total_failures <= total_from_auth
+        assert success_messages <= total_from_auth
         
         # Disposition breakdown should sum to total
         disposition_total = sum(auth_stats['disposition_breakdown'].values())

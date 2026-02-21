@@ -10,7 +10,7 @@ import json
 import logging
 import boto3
 import traceback
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List, Optional, Tuple
 from collections import defaultdict, Counter
 from decimal import Decimal
@@ -24,7 +24,9 @@ logger.setLevel(logging.INFO)
 dynamodb = boto3.resource('dynamodb')
 
 # Environment variables (set by CDK)
-ANALYSIS_TABLE_NAME = 'dmarc-analysis'  # Will be overridden by environment
+import os
+ANALYSIS_TABLE_NAME = os.getenv('ANALYSIS_TABLE_NAME', 'dmarc-analysis')
+REPORTS_TABLE_NAME = os.getenv('REPORTS_TABLE_NAME', 'dmarc-reports')
 
 
 class AnalysisError(Exception):
@@ -122,7 +124,7 @@ def analyze_domain(domain: str) -> None:
     """
     try:
         # Get recent reports for the domain (last 30 days)
-        end_date = datetime.utcnow()
+        end_date = datetime.now(timezone.utc)
         start_date = end_date - timedelta(days=30)
         
         reports = get_domain_reports(domain, start_date, end_date)
@@ -177,7 +179,7 @@ def get_domain_reports(domain: str, start_date: datetime, end_date: datetime) ->
         List of report records
     """
     try:
-        table = dynamodb.Table('dmarc-reports')  # Use environment variable in production
+        table = dynamodb.Table(REPORTS_TABLE_NAME)
         
         # Query reports by domain and date range
         start_timestamp = int(start_date.timestamp())
@@ -244,7 +246,7 @@ def calculate_authentication_stats(reports: List[Dict[str, Any]]) -> Dict[str, A
         count = int(report.get('count', 0))
         total_messages += count
         
-        # Check DMARC alignment (both DKIM and SPF must pass)
+        # Check DMARC alignment (DKIM or SPF must pass per DMARC spec)
         dkim_result = report.get('dkim_result', 'fail')
         spf_result = report.get('spf_result', 'fail')
         
@@ -254,7 +256,7 @@ def calculate_authentication_stats(reports: List[Dict[str, Any]]) -> Dict[str, A
         if spf_result == 'pass':
             spf_pass_messages += count
             
-        if dkim_result == 'pass' and spf_result == 'pass':
+        if dkim_result == 'pass' or spf_result == 'pass':
             dmarc_aligned_messages += count
         
         # Count dispositions
@@ -495,7 +497,7 @@ def calculate_trends(domain: str, current_reports: List[Dict[str, Any]]) -> Dict
         table = dynamodb.Table(ANALYSIS_TABLE_NAME)
         
         # Look for analysis from 7 days ago
-        previous_date = (datetime.utcnow() - timedelta(days=7)).strftime('%Y-%m-%d')
+        previous_date = (datetime.now(timezone.utc) - timedelta(days=7)).strftime('%Y-%m-%d')
         
         response = table.get_item(
             Key={
@@ -590,7 +592,7 @@ def store_analysis_results(domain: str, auth_stats: Dict[str, Any],
             'security_issues': convert_floats(security_issues),
             'recommendations': convert_floats(recommendations),
             'trend_data': convert_floats(trend_data),
-            'analyzed_at': int(datetime.utcnow().timestamp()),
+            'analyzed_at': int(datetime.now(timezone.utc).timestamp()),
             'analysis_version': '1.0'
         }
         

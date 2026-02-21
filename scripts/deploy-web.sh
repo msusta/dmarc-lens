@@ -70,7 +70,9 @@ echo "  CloudFront ID: $CLOUDFRONT_ID"
 echo "  Website URL: $WEBSITE_URL"
 
 # Navigate to web directory
-cd ../web
+SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+cd "$PROJECT_ROOT/web"
 
 # Check if Node.js dependencies are installed
 if [ ! -d "node_modules" ]; then

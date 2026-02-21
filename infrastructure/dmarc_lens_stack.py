@@ -327,7 +327,7 @@ class DmarcLensStack(Stack):
             self,
             "DmarcLensUserPool",
             user_pool_name=f"dmarc-lens-users-{self.env_name}",
-            self_sign_up_enabled=True,
+            self_sign_up_enabled=False,
             sign_in_aliases=cognito.SignInAliases(
                 email=True,
                 username=True
@@ -374,13 +374,13 @@ class DmarcLensStack(Stack):
             auth_flows=cognito.AuthFlow(
                 user_password=True,
                 user_srp=True,
-                custom=True,
-                admin_user_password=True
+                custom=False,
+                admin_user_password=False
             ),
             o_auth=cognito.OAuthSettings(
                 flows=cognito.OAuthFlows(
                     authorization_code_grant=True,
-                    implicit_code_grant=True
+                    implicit_code_grant=False
                 ),
                 scopes=[
                     cognito.OAuthScope.EMAIL,
@@ -443,8 +443,11 @@ class DmarcLensStack(Stack):
                         iam.PolicyStatement(
                             effect=iam.Effect.ALLOW,
                             actions=[
-                                "cognito-sync:*",
-                                "cognito-identity:*"
+                                "cognito-sync:GetCognitoEvents",
+                                "cognito-sync:ListRecords",
+                                "cognito-sync:QueryRecords",
+                                "cognito-identity:GetId",
+                                "cognito-identity:GetCredentialsForIdentity"
                             ],
                             resources=["*"]
                         )
@@ -642,6 +645,7 @@ class DmarcLensStack(Stack):
             environment={
                 "REPORTS_TABLE_NAME": self.reports_table.table_name,
                 "ANALYSIS_TABLE_NAME": self.analysis_table.table_name,
+                "CORS_ORIGIN": self.config.get("api", {}).get("cors_origins", ["http://localhost:3000"])[0],
                 "LOG_LEVEL": "INFO" if self.env_name == "prod" else "DEBUG",
                 "ENVIRONMENT": self.env_name
             },
@@ -665,6 +669,7 @@ class DmarcLensStack(Stack):
             environment={
                 "USER_POOL_ID": self.user_pool.user_pool_id,
                 "USER_POOL_CLIENT_ID": self.user_pool_client.user_pool_client_id,
+                "CORS_ORIGIN": self.config.get("api", {}).get("cors_origins", ["http://localhost:3000"])[0],
                 "LOG_LEVEL": "INFO" if self.env_name == "prod" else "DEBUG",
                 "ENVIRONMENT": self.env_name
             },
@@ -843,12 +848,52 @@ class DmarcLensStack(Stack):
                     ),
                     behaviors=[
                         cloudfront.Behavior(
-                            path_pattern="/api/*",
+                            path_pattern="/reports*",
                             allowed_methods=cloudfront.CloudFrontAllowedMethods.ALL,
                             cached_methods=cloudfront.CloudFrontAllowedCachedMethods.GET_HEAD,
                             compress=True,
                             viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-                            default_ttl=Duration.seconds(0),  # Don't cache API responses
+                            default_ttl=Duration.seconds(0),
+                            max_ttl=Duration.seconds(0),
+                            min_ttl=Duration.seconds(0)
+                        ),
+                        cloudfront.Behavior(
+                            path_pattern="/analysis*",
+                            allowed_methods=cloudfront.CloudFrontAllowedMethods.ALL,
+                            cached_methods=cloudfront.CloudFrontAllowedCachedMethods.GET_HEAD,
+                            compress=True,
+                            viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+                            default_ttl=Duration.seconds(0),
+                            max_ttl=Duration.seconds(0),
+                            min_ttl=Duration.seconds(0)
+                        ),
+                        cloudfront.Behavior(
+                            path_pattern="/dashboard",
+                            allowed_methods=cloudfront.CloudFrontAllowedMethods.ALL,
+                            cached_methods=cloudfront.CloudFrontAllowedCachedMethods.GET_HEAD,
+                            compress=True,
+                            viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+                            default_ttl=Duration.seconds(0),
+                            max_ttl=Duration.seconds(0),
+                            min_ttl=Duration.seconds(0)
+                        ),
+                        cloudfront.Behavior(
+                            path_pattern="/auth/*",
+                            allowed_methods=cloudfront.CloudFrontAllowedMethods.ALL,
+                            cached_methods=cloudfront.CloudFrontAllowedCachedMethods.GET_HEAD,
+                            compress=True,
+                            viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+                            default_ttl=Duration.seconds(0),
+                            max_ttl=Duration.seconds(0),
+                            min_ttl=Duration.seconds(0)
+                        ),
+                        cloudfront.Behavior(
+                            path_pattern="/health",
+                            allowed_methods=cloudfront.CloudFrontAllowedMethods.GET_HEAD,
+                            cached_methods=cloudfront.CloudFrontAllowedCachedMethods.GET_HEAD,
+                            compress=True,
+                            viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+                            default_ttl=Duration.seconds(0),
                             max_ttl=Duration.seconds(0),
                             min_ttl=Duration.seconds(0)
                         )
@@ -873,14 +918,7 @@ class DmarcLensStack(Stack):
             ],
             
             # Default root object
-            default_root_object="index.html",
-            
-            # Enable logging
-            logging_config=cloudfront.LoggingConfiguration(
-                bucket=None,  # Will use default CloudFront logging
-                include_cookies=False,
-                prefix=f"dmarc-lens-access-logs-{self.env_name}/"
-            )
+            default_root_object="index.html"
         )
         
         # Store CloudFront domain name for outputs
@@ -924,7 +962,7 @@ class DmarcLensStack(Stack):
             self,
             "ApiEndpoint",
             value=f"{self.api_endpoint}/{self.env_name}",
-            description="API Gateway endpoint URL"
+            description="API Gateway endpoint URL (with stage)"
         )
         
         # Output Cognito User Pool ID for frontend configuration

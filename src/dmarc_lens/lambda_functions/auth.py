@@ -194,6 +194,10 @@ def validate_jwt_token(token: str) -> Dict[str, Any]:
         if claims.get('nbf', 0) > current_time:
             return {'valid': False, 'error': 'Token not yet valid'}
         
+        # Check that sub claim exists
+        if not claims.get('sub'):
+            return {'valid': False, 'error': 'Token missing subject claim'}
+        
         return {'valid': True, 'claims': claims}
         
     except ExpiredSignatureError:
@@ -319,13 +323,14 @@ def create_success_response(data: Any) -> Dict[str, Any]:
     Returns:
         API Gateway response
     """
+    cors_origin = os.getenv('CORS_ORIGIN', 'http://localhost:3000')
     return {
         'statusCode': 200,
         'headers': {
             'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Origin': cors_origin,
             'Access-Control-Allow-Headers': 'Content-Type,Authorization',
-            'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS'
+            'Access-Control-Allow-Methods': 'GET,POST,OPTIONS'
         },
         'body': json.dumps(data)
     }
@@ -342,13 +347,14 @@ def create_error_response(status_code: int, message: str) -> Dict[str, Any]:
     Returns:
         API Gateway response
     """
+    cors_origin = os.getenv('CORS_ORIGIN', 'http://localhost:3000')
     return {
         'statusCode': status_code,
         'headers': {
             'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Origin': cors_origin,
             'Access-Control-Allow-Headers': 'Content-Type,Authorization',
-            'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS'
+            'Access-Control-Allow-Methods': 'GET,POST,OPTIONS'
         },
         'body': json.dumps({
             'error': {

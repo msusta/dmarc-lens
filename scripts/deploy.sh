@@ -33,18 +33,22 @@ echo "  Account: $AWS_ACCOUNT"
 echo "  Region: $AWS_REGION"
 echo "  Environment: $ENVIRONMENT"
 
+# Resolve the project root directory (parent of scripts/)
+SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
 # Check if virtual environment exists and activate it
-if [ ! -d "../venv" ]; then
+if [ ! -d "$PROJECT_ROOT/venv" ]; then
     echo "Error: Virtual environment not found. Please run setup-dev.sh first"
     exit 1
 fi
 
 echo "Activating virtual environment..."
-source ../venv/bin/activate
+source "$PROJECT_ROOT/venv/bin/activate"
 
 # Install CDK dependencies
 echo "Installing CDK dependencies..."
-pip install -r requirements-cdk.txt > /dev/null
+pip install -r "$PROJECT_ROOT/requirements-cdk.txt" > /dev/null
 
 # Install Node.js dependencies for CDK
 echo "Installing Node.js dependencies..."

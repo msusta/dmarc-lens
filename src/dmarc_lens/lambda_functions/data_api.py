@@ -322,12 +322,22 @@ def handle_get_dashboard(query_params: Dict[str, str]) -> Dict[str, Any]:
         end_date = datetime.now(timezone.utc)
         start_timestamp = int((end_date.timestamp() - (days * 24 * 3600)))
         
-        # Get recent reports summary
-        reports_response = reports_table.scan(
-            FilterExpression=Attr('date_range_begin').gte(start_timestamp),
-            ProjectionExpression='domain, #count, disposition, dkim_result, spf_result',
-            ExpressionAttributeNames={'#count': 'count'}
-        )
+        # Get recent reports summary (paginated scan with date filter)
+        reports_data = []
+        scan_kwargs = {
+            'FilterExpression': Attr('date_range_begin').gte(start_timestamp),
+            'ProjectionExpression': 'domain, #count, disposition, dkim_result, spf_result',
+            'ExpressionAttributeNames': {'#count': 'count'},
+            'Limit': 1000
+        }
+        reports_response = reports_table.scan(**scan_kwargs)
+        reports_data.extend(reports_response.get('Items', []))
+        
+        # Paginate up to a reasonable limit
+        while 'LastEvaluatedKey' in reports_response and len(reports_data) < 5000:
+            scan_kwargs['ExclusiveStartKey'] = reports_response['LastEvaluatedKey']
+            reports_response = reports_table.scan(**scan_kwargs)
+            reports_data.extend(reports_response.get('Items', []))
         
         # Get recent analysis data
         analysis_response = analysis_table.scan(
@@ -336,7 +346,6 @@ def handle_get_dashboard(query_params: Dict[str, str]) -> Dict[str, Any]:
         )
         
         # Process reports data
-        reports_data = reports_response.get('Items', [])
         domain_stats = {}
         total_messages = 0
         auth_success = 0
@@ -418,13 +427,14 @@ def create_success_response(data: Any) -> Dict[str, Any]:
     Returns:
         API Gateway response
     """
+    cors_origin = os.getenv('CORS_ORIGIN', 'http://localhost:3000')
     return {
         'statusCode': 200,
         'headers': {
             'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Origin': cors_origin,
             'Access-Control-Allow-Headers': 'Content-Type,Authorization',
-            'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS'
+            'Access-Control-Allow-Methods': 'GET,OPTIONS'
         },
         'body': json.dumps(data, cls=DecimalEncoder)
     }
@@ -441,13 +451,14 @@ def create_error_response(status_code: int, message: str) -> Dict[str, Any]:
     Returns:
         API Gateway response
     """
+    cors_origin = os.getenv('CORS_ORIGIN', 'http://localhost:3000')
     return {
         'statusCode': status_code,
         'headers': {
             'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Origin': cors_origin,
             'Access-Control-Allow-Headers': 'Content-Type,Authorization',
-            'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS'
+            'Access-Control-Allow-Methods': 'GET,OPTIONS'
         },
         'body': json.dumps({
             'error': {
