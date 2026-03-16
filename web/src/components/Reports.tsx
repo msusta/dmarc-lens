@@ -29,6 +29,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useReports } from '../hooks/useReports';
+import { useDashboard } from '../hooks/useDashboard';
 import { exportReportData } from '../services/api';
 
 const Reports: React.FC = () => {
@@ -44,6 +45,11 @@ const Reports: React.FC = () => {
     limit: rowsPerPage,
     domain: domainFilter || undefined,
   });
+
+  const { data: dashboardData } = useDashboard();
+  const domainOptions: string[] = (dashboardData as any)?.top_domains?.map(
+    (d: { domain: string }) => d.domain
+  ) ?? [];
 
   const handleChangePage = (event: unknown, newPage: number) => {
     setPage(newPage);
@@ -171,8 +177,9 @@ const Reports: React.FC = () => {
               onChange={(e) => setDomainFilter(e.target.value)}
             >
               <MenuItem value="">All Domains</MenuItem>
-              <MenuItem value="example.com">example.com</MenuItem>
-              <MenuItem value="test.org">test.org</MenuItem>
+              {domainOptions.map((d: string) => (
+                <MenuItem key={d} value={d}>{d}</MenuItem>
+              ))}
             </Select>
           </FormControl>
 

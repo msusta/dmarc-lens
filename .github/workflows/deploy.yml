@@ -29,20 +29,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -r requirements-dev.txt
+      - name: Install dependencies
+        run: uv sync --group dev
 
       - name: Run Python tests
         run: |
-          python -m pytest tests/ -v --cov=src/dmarc_lens --cov-report=xml
+          uv run python -m pytest tests/ -v --override-ini="addopts=" --cov=src/dmarc_lens --cov-report=xml
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
@@ -142,10 +142,10 @@ jobs:
           # Get website URL
           STACK_NAME="DmarcLensStack-prod"
           WEBSITE_URL=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query 'Stacks[0].Outputs[?OutputKey==`WebsiteUrl`].OutputValue' --output text)
-          
+
           # Wait for deployment to propagate
           sleep 60
-          
+
           # Basic smoke test
           curl -f $WEBSITE_URL || exit 1
-          echo "✓ Production deployment verified"
+          echo "Production deployment verified"

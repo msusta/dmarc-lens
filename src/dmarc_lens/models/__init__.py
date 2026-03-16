@@ -12,10 +12,10 @@ from .dmarc_models import (
 )
 
 __all__ = [
-    'ReportMetadata',
-    'PolicyPublished',
-    'PolicyEvaluated',
-    'AuthResult',
-    'DMARCRecord',
-    'DMARCReport',
+    "ReportMetadata",
+    "PolicyPublished",
+    "PolicyEvaluated",
+    "AuthResult",
+    "DMARCRecord",
+    "DMARCReport",
 ]

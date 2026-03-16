@@ -20,13 +20,12 @@ const mockDashboardData: DashboardSummary = {
   ],
 };
 
-export const useDashboard = () => {
+export const useDashboard = (days?: number) => {
   return useQuery({
-    queryKey: ['dashboard'],
+    queryKey: ['dashboard', days],
     queryFn: async () => {
       try {
-        // Try to fetch real data, fall back to mock data if API is not available
-        return await getDashboardSummary();
+        return await getDashboardSummary(days);
       } catch (error) {
         console.warn('API not available, using mock data:', error);
         return mockDashboardData;

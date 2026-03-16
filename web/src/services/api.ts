@@ -9,10 +9,15 @@ import {
 const API_NAME = 'dmarcApi';
 
 // Dashboard API
-export const getDashboardSummary = async (): Promise<DashboardSummary> => {
+export const getDashboardSummary = async (days?: number): Promise<DashboardSummary> => {
+  const queryParams = new URLSearchParams();
+  if (days !== undefined) {
+    queryParams.append('days', days.toString());
+  }
+  const qs = queryParams.toString();
   const response = await get({
     apiName: API_NAME,
-    path: '/dashboard',
+    path: qs ? `/dashboard?${qs}` : '/dashboard',
   }).response;
   const data = await response.body.json() as any;
   return data as DashboardSummary;

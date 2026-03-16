@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { getDomainAnalysis } from '../services/api';
+import { getDomainAnalysis, getDashboardSummary } from '../services/api';
 import { DomainAnalysis } from '../types';
 
 // Mock data for development
@@ -68,13 +68,29 @@ export const useDomainAnalysis = (domain?: string) => {
         if (domain) {
           return await getDomainAnalysis(domain);
         } else {
-          // Return all domains for overview
+          // Fetch top domains from dashboard, then fetch analysis for each
+          const dashboard = await getDashboardSummary();
+          const topDomains = (dashboard as any).top_domains as
+            | Array<{ domain: string }>
+            | undefined;
+          if (topDomains && topDomains.length > 0) {
+            const analyses = await Promise.all(
+              topDomains.slice(0, 5).map(async (td) => {
+                try {
+                  return await getDomainAnalysis(td.domain);
+                } catch {
+                  return null;
+                }
+              })
+            );
+            return analyses.filter((a): a is DomainAnalysis => a !== null);
+          }
           return mockDomainData;
         }
       } catch (error) {
         console.warn('API not available, using mock data:', error);
-        return domain 
-          ? mockDomainData.find(d => d.domain === domain) || mockDomainData[0]
+        return domain
+          ? mockDomainData.find((d) => d.domain === domain) || mockDomainData[0]
           : mockDomainData;
       }
     },

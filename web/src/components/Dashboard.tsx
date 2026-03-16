@@ -48,7 +48,14 @@ const Dashboard: React.FC = () => {
     endDate: new Date(),
   });
 
-  const { data: dashboardData, isLoading: dashboardLoading, error: dashboardError, refetch: refetchDashboard } = useDashboard();
+  // Calculate days from timePeriod
+  const days = timePeriod.startDate && timePeriod.endDate
+    ? Math.max(1, Math.round(
+        (timePeriod.endDate.getTime() - timePeriod.startDate.getTime()) / (24 * 60 * 60 * 1000)
+      ))
+    : 7;
+
+  const { data: dashboardData, isLoading: dashboardLoading, error: dashboardError, refetch: refetchDashboard } = useDashboard(days);
   const { data: domainData, isLoading: domainLoading, error: domainError } = useDomainAnalysis();
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
