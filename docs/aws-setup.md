@@ -6,8 +6,9 @@ This guide helps you configure AWS CLI and CDK for DMARC Lens deployment.
 
 - AWS Account with appropriate permissions
 - AWS CLI installed
-- Node.js 16+ installed
-- Python 3.8+ installed
+- Node.js 18+ installed
+- Python 3.11+ installed
+- [UV](https://docs.astral.sh/uv/) package manager installed
 
 ## AWS CLI Configuration
 
@@ -16,19 +17,16 @@ This guide helps you configure AWS CLI and CDK for DMARC Lens deployment.
    # On Ubuntu/Debian
    sudo apt-get update
    sudo apt-get install awscli
-   
+
    # On macOS
    brew install awscli
-   
-   # Or using pip
-   pip install awscli
    ```
 
 2. **Configure AWS credentials**:
    ```bash
    aws configure
    ```
-   
+
    You'll be prompted for:
    - AWS Access Key ID
    - AWS Secret Access Key
@@ -68,6 +66,7 @@ Before deploying DMARC Lens, you need to bootstrap CDK in your AWS account:
 
 ```bash
 cd infrastructure
+npm install
 npx cdk bootstrap
 ```
 
@@ -90,11 +89,17 @@ Test your setup by synthesizing the CDK stack:
 
 ```bash
 cd infrastructure
-source ../venv/bin/activate
 npx cdk synth
 ```
 
 If successful, you should see CloudFormation template output without errors.
+
+## Environment Configuration
+
+The `infrastructure/environments/` directory contains per-environment configuration:
+
+- `dev.json` — Development environment settings
+- `prod.json` — Production environment settings
 
 ## Troubleshooting
 
@@ -103,6 +108,7 @@ If successful, you should see CloudFormation template output without errors.
 1. **Permission Denied**: Ensure your AWS user has sufficient permissions
 2. **Region Mismatch**: Verify your AWS CLI region matches your intended deployment region
 3. **CDK Version**: Ensure you're using CDK v2 (not v1)
+4. **SES Sandbox**: New SES accounts are in sandbox mode — you'll need to verify email addresses or request production access
 
 ### Getting Help
 
