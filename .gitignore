@@ -179,3 +179,5 @@ node_modules/
 # Temporary files
 *.tmp
 *.temp
+
+infrastructure/environments/**

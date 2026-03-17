@@ -60,15 +60,25 @@ Your AWS user/role needs the following permissions for DMARC Lens deployment:
 ### Recommended Policy
 For development, you can use the `PowerUserAccess` managed policy, or create a custom policy with the specific permissions listed above.
 
-## CDK Bootstrap
+## CDK Setup
 
-Before deploying DMARC Lens, you need to bootstrap CDK in your AWS account:
+The infrastructure is defined in Python using `aws-cdk-lib` (managed by UV in `pyproject.toml`). The CDK CLI itself is a Node.js tool installed via `infrastructure/package.json`.
 
-```bash
-cd infrastructure
-npm install
-npx cdk bootstrap
-```
+1. **Install Python CDK library** (from project root):
+   ```bash
+   uv sync --group cdk
+   ```
+
+2. **Install CDK CLI** (Node.js):
+   ```bash
+   cd infrastructure
+   npm install
+   ```
+
+3. **Bootstrap CDK** (first time per AWS account/region):
+   ```bash
+   npx cdk bootstrap
+   ```
 
 This creates the necessary resources for CDK deployments in your account.
 

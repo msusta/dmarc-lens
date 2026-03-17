@@ -53,14 +53,13 @@ dmarc-lens/
 │   ├── package.json
 │   └── tsconfig.json
 ├── infrastructure/                  # AWS CDK infrastructure code
-│   ├── app.py                       # CDK app entry point
-│   ├── dmarc_lens_stack.py          # CDK stack definition
+│   ├── app.py                       # CDK app entry point (Python)
+│   ├── dmarc_lens_stack.py          # CDK stack definition (Python)
 │   ├── environments/                # Per-environment config
 │   │   ├── dev.json
 │   │   └── prod.json
-│   ├── cdk.json
-│   ├── package.json                 # CDK npm dependencies
-│   └── requirements-cdk.txt         # CDK Python dependencies (for Lambda bundling)
+│   ├── cdk.json                     # CDK config (uses uv run for Python)
+│   └── package.json                 # CDK CLI (Node.js wrapper only)
 ├── tests/                           # Python test files
 │   ├── unit/
 │   │   ├── test_dmarc_models.py     # Data model tests

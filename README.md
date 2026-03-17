@@ -64,7 +64,7 @@ cd dmarc-lens
 
 2. Install Python dependencies with UV:
 ```bash
-uv sync --group dev
+uv sync --group dev --group cdk
 ```
 
 3. Install frontend dependencies:
@@ -72,12 +72,14 @@ uv sync --group dev
 cd web && npm install && cd ..
 ```
 
-4. Install CDK dependencies:
+4. Install CDK CLI (Node.js wrapper for CDK commands):
 ```bash
 cd infrastructure && npm install && cd ..
 ```
 
 ### Infrastructure Deployment
+
+The CDK app is written in Python (`infrastructure/app.py`). The Node.js `package.json` in `infrastructure/` only provides the CDK CLI tool — all infrastructure code is Python using `aws-cdk-lib`.
 
 1. Bootstrap CDK (first time only):
 ```bash
@@ -88,6 +90,11 @@ npx cdk bootstrap
 2. Deploy the infrastructure:
 ```bash
 npx cdk deploy
+```
+
+3. Deploy to a specific environment:
+```bash
+npx cdk deploy -c environment=prod
 ```
 
 ## Development
