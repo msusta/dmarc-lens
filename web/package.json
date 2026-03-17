@@ -47,6 +47,12 @@
       "\\.(css|less|scss|sass)$": "<rootDir>/src/__mocks__/styleMock.js"
     }
   },
+  "overrides": {
+    "svgo": "2.8.2",
+    "underscore": "1.13.8",
+    "lodash": "4.17.23",
+    "nth-check": "2.0.1"
+  },
   "browserslist": {
     "production": [
       ">0.2%",
