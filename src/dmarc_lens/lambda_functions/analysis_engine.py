@@ -12,10 +12,9 @@ import os
 import boto3
 import traceback
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List
 from collections import defaultdict, Counter
 from decimal import Decimal
-from botocore.exceptions import ClientError
 
 # Configure logging
 logger = logging.getLogger()
@@ -184,8 +183,13 @@ def get_domain_reports(
         start_timestamp = int(start_date.timestamp())
         end_timestamp = int(end_date.timestamp())
 
+        filter_expr = (
+            "#domain = :domain"
+            " AND #date_begin BETWEEN :start_date AND :end_date"
+        )
+
         response = table.scan(
-            FilterExpression="#domain = :domain AND #date_begin BETWEEN :start_date AND :end_date",
+            FilterExpression=filter_expr,
             ExpressionAttributeNames={
                 "#domain": "domain",
                 "#date_begin": "date_range_begin",
@@ -202,7 +206,7 @@ def get_domain_reports(
         # Handle pagination
         while "LastEvaluatedKey" in response:
             response = table.scan(
-                FilterExpression="#domain = :domain AND #date_begin BETWEEN :start_date AND :end_date",
+                FilterExpression=filter_expr,
                 ExpressionAttributeNames={
                     "#domain": "domain",
                     "#date_begin": "date_range_begin",
@@ -349,7 +353,12 @@ def detect_security_issues(
                 "severity": (
                     "high" if auth_stats["dmarc_success_rate"] < 25 else "medium"
                 ),
-                "description": f"DMARC success rate is {auth_stats['dmarc_success_rate']}%, indicating potential authentication issues",
+                "description": (
+                    f"DMARC success rate is"
+                    f" {auth_stats['dmarc_success_rate']}%,"
+                    " indicating potential"
+                    " authentication issues"
+                ),
                 "metric": auth_stats["dmarc_success_rate"],
             }
         )
@@ -373,7 +382,11 @@ def detect_security_issues(
                 {
                     "type": "suspicious_ip_volume",
                     "severity": "medium",
-                    "description": f"IP {ip} is sending {percentage:.1f}% of all mail for this domain",
+                    "description": (
+                        f"IP {ip} is sending"
+                        f" {percentage:.1f}% of all"
+                        " mail for this domain"
+                    ),
                     "metric": percentage,
                     "ip_address": ip,
                 }
@@ -394,7 +407,11 @@ def detect_security_issues(
             {
                 "type": "policy_violations",
                 "severity": "high" if reject_count > 0 else "medium",
-                "description": f"{total_violations} messages were quarantined or rejected ({violation_rate:.1f}%)",
+                "description": (
+                    f"{total_violations} messages were"
+                    " quarantined or rejected"
+                    f" ({violation_rate:.1f}%)"
+                ),
                 "metric": violation_rate,
                 "quarantined": quarantine_count,
                 "rejected": reject_count,
@@ -430,7 +447,11 @@ def generate_recommendations(
                     "type": "dkim_improvement",
                     "priority": "high",
                     "title": "Improve DKIM Authentication",
-                    "description": "DKIM success rate is lower than SPF. Review DKIM signing configuration and key management.",
+                    "description": (
+                        "DKIM success rate is lower than SPF."
+                        " Review DKIM signing configuration"
+                        " and key management."
+                    ),
                     "action_items": [
                         "Verify DKIM keys are properly published in DNS",
                         "Check DKIM signing configuration on mail servers",
@@ -444,9 +465,17 @@ def generate_recommendations(
                     "type": "spf_improvement",
                     "priority": "high",
                     "title": "Improve SPF Authentication",
-                    "description": "SPF success rate is lower than DKIM. Review SPF record configuration.",
+                    "description": (
+                        "SPF success rate is lower"
+                        " than DKIM. Review SPF"
+                        " record configuration."
+                    ),
                     "action_items": [
-                        "Review and update SPF record to include all legitimate sending sources",
+                        (
+                            "Review and update SPF record to"
+                            " include all legitimate"
+                            " sending sources"
+                        ),
                         "Check for SPF record syntax errors",
                         "Consider SPF record length and DNS lookup limits",
                     ],
@@ -460,7 +489,11 @@ def generate_recommendations(
                 "type": "policy_enforcement",
                 "priority": "medium",
                 "title": "Consider Stricter DMARC Policy",
-                "description": "High authentication success rate allows for stricter policy enforcement.",
+                "description": (
+                    "High authentication success rate"
+                    " allows for stricter policy"
+                    " enforcement."
+                ),
                 "action_items": [
                     'Consider upgrading DMARC policy from "none" to "quarantine"',
                     "Monitor for any legitimate mail issues after policy change",
@@ -477,7 +510,11 @@ def generate_recommendations(
                     "type": "investigate_ip",
                     "priority": "medium",
                     "title": f'Investigate High-Volume IP: {issue["ip_address"]}',
-                    "description": f'IP address is sending {issue["metric"]:.1f}% of domain mail.',
+                    "description": (
+                        "IP address is sending"
+                        f" {issue['metric']:.1f}%"
+                        " of domain mail."
+                    ),
                     "action_items": [
                         "Verify this IP is an authorized sender",
                         "Check if this represents a compromised system",
@@ -492,10 +529,16 @@ def generate_recommendations(
                     "type": "policy_violations",
                     "priority": "high",
                     "title": "Address Policy Violations",
-                    "description": f'{issue["quarantined"] + issue["rejected"]} messages violated DMARC policy.',
+                    "description": (
+                        f"{issue['quarantined'] + issue['rejected']}"
+                        " messages violated DMARC policy."
+                    ),
                     "action_items": [
                         "Investigate sources of policy violations",
-                        "Determine if violations are from legitimate or malicious sources",
+                        (
+                            "Determine if violations are from"
+                            " legitimate or malicious sources"
+                        ),
                         "Update authentication configuration if needed",
                     ],
                 }
@@ -552,7 +595,9 @@ def calculate_trends(
                 (current_rate / current_total * 100) if current_total > 0 else 0
             )
 
-            previous_success_rate = float(previous_analysis.get("auth_success_rate", 0))  # type: ignore[arg-type]
+            previous_success_rate = float(
+                previous_analysis.get("auth_success_rate", 0)  # type: ignore[arg-type]
+            )
 
             if current_success_rate > previous_success_rate + 5:
                 trends["success_rate_trend"] = "improving"
@@ -560,7 +605,9 @@ def calculate_trends(
                 trends["success_rate_trend"] = "declining"
 
             # Calculate volume trend
-            previous_total = int(previous_analysis.get("total_messages", 0))  # type: ignore[arg-type]
+            previous_total = int(
+                previous_analysis.get("total_messages", 0)  # type: ignore[arg-type]
+            )
 
             if current_total > previous_total * 1.2:
                 trends["message_volume_trend"] = "increasing"

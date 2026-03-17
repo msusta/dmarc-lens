@@ -7,7 +7,7 @@ against the DMARC aggregate report schema.
 
 import xml.etree.ElementTree as ET
 import logging
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 from datetime import datetime, timezone
 import re
 

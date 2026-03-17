@@ -11,7 +11,7 @@ import zipfile
 import io
 import logging
 from email.message import EmailMessage
-from typing import List, Tuple, Optional, BinaryIO
+from typing import List, Tuple
 from pathlib import Path
 
 logger = logging.getLogger(__name__)

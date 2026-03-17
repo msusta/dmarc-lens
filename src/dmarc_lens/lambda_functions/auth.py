@@ -11,7 +11,7 @@ import json
 import logging
 import os
 import time
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from urllib.request import urlopen
 from urllib.error import URLError
 
@@ -227,7 +227,7 @@ def get_jwks(region: str, user_pool_id: str) -> Dict[str, Any]:
     Returns:
         JWKS dictionary
     """
-    global _jwks_cache, _jwks_cache_expiry
+    global _jwks_cache_expiry
 
     current_time = int(time.time())
     cache_key = f"{region}:{user_pool_id}"
@@ -238,7 +238,10 @@ def get_jwks(region: str, user_pool_id: str) -> Dict[str, Any]:
 
     try:
         # Fetch JWKS from Cognito
-        jwks_url = f"https://cognito-idp.{region}.amazonaws.com/{user_pool_id}/.well-known/jwks.json"
+        jwks_url = (
+            f"https://cognito-idp.{region}.amazonaws.com"
+            f"/{user_pool_id}/.well-known/jwks.json"
+        )
 
         with urlopen(jwks_url) as response:
             jwks = json.loads(response.read().decode("utf-8"))

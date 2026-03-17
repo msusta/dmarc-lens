@@ -10,8 +10,6 @@ inputs for JWT token validation, user authentication, and API authorization.
 
 import json
 import time
-import jwt
-from datetime import datetime, timezone, timedelta
 from unittest.mock import patch, MagicMock
 
 import pytest
@@ -165,14 +163,13 @@ class TestAuthenticationAndAuthorization:
                 ]
             }
 
-            with patch(
-                "dmarc_lens.lambda_functions.auth.get_jwks", return_value=mock_jwks
-            ), patch(
-                "jwt.get_unverified_header", return_value={"kid": "test-key-id"}
-            ), patch(
-                "jwt.decode", return_value=claims
-            ), patch(
-                "jwt.algorithms.RSAAlgorithm.from_jwk"
+            with (
+                patch(
+                    "dmarc_lens.lambda_functions.auth.get_jwks", return_value=mock_jwks
+                ),
+                patch("jwt.get_unverified_header", return_value={"kid": "test-key-id"}),
+                patch("jwt.decode", return_value=claims),
+                patch("jwt.algorithms.RSAAlgorithm.from_jwk"),
             ):
 
                 result = validate_jwt_token("mock-token")
@@ -211,14 +208,13 @@ class TestAuthenticationAndAuthorization:
                 ]
             }
 
-            with patch(
-                "dmarc_lens.lambda_functions.auth.get_jwks", return_value=mock_jwks
-            ), patch(
-                "jwt.get_unverified_header", return_value={"kid": "test-key-id"}
-            ), patch(
-                "jwt.decode", return_value=claims
-            ), patch(
-                "jwt.algorithms.RSAAlgorithm.from_jwk"
+            with (
+                patch(
+                    "dmarc_lens.lambda_functions.auth.get_jwks", return_value=mock_jwks
+                ),
+                patch("jwt.get_unverified_header", return_value={"kid": "test-key-id"}),
+                patch("jwt.decode", return_value=claims),
+                patch("jwt.algorithms.RSAAlgorithm.from_jwk"),
             ):
 
                 result = validate_jwt_token("mock-token")
@@ -257,14 +253,13 @@ class TestAuthenticationAndAuthorization:
                 ]
             }
 
-            with patch(
-                "dmarc_lens.lambda_functions.auth.get_jwks", return_value=mock_jwks
-            ), patch(
-                "jwt.get_unverified_header", return_value={"kid": "test-key-id"}
-            ), patch(
-                "jwt.decode", return_value=claims
-            ), patch(
-                "jwt.algorithms.RSAAlgorithm.from_jwk"
+            with (
+                patch(
+                    "dmarc_lens.lambda_functions.auth.get_jwks", return_value=mock_jwks
+                ),
+                patch("jwt.get_unverified_header", return_value={"kid": "test-key-id"}),
+                patch("jwt.decode", return_value=claims),
+                patch("jwt.algorithms.RSAAlgorithm.from_jwk"),
             ):
 
                 result = validate_jwt_token("mock-token")
@@ -291,11 +286,14 @@ class TestAuthenticationAndAuthorization:
             },
         ):
             # Mock all external dependencies
-            with patch(
-                "dmarc_lens.lambda_functions.auth.validate_jwt_token"
-            ) as mock_validate, patch(
-                "dmarc_lens.lambda_functions.auth.get_user_info"
-            ) as mock_user_info:
+            with (
+                patch(
+                    "dmarc_lens.lambda_functions.auth.validate_jwt_token"
+                ) as mock_validate,
+                patch(
+                    "dmarc_lens.lambda_functions.auth.get_user_info"
+                ) as mock_user_info,
+            ):
 
                 # Configure mocks based on event
                 if event["path"] == "/health":
@@ -397,9 +395,10 @@ class TestAuthenticationAndAuthorization:
             "Enabled": True,
         }
 
-        with patch(
-            "dmarc_lens.lambda_functions.auth.cognito_client", mock_cognito
-        ), patch.dict("os.environ", {"USER_POOL_ID": "test-pool"}):
+        with (
+            patch("dmarc_lens.lambda_functions.auth.cognito_client", mock_cognito),
+            patch.dict("os.environ", {"USER_POOL_ID": "test-pool"}),
+        ):
             user_info = get_user_info(claims)
 
             # Verify user info structure and consistency

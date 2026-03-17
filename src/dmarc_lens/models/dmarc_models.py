@@ -76,7 +76,10 @@ class PolicyPublished:
         if not self.domain or not self.domain.strip():
             raise ValueError("Domain cannot be empty")
         # Basic domain validation
-        domain_pattern = r"^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"
+        domain_pattern = (
+            r"^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?"
+            r"(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"
+        )
         if not re.match(domain_pattern, self.domain):
             raise ValueError(f"Invalid domain format: {self.domain}")
 
@@ -89,7 +92,8 @@ class PolicyPublished:
             )
         if self.sp is not None and self.sp not in valid_policies:
             raise ValueError(
-                f"Invalid subdomain policy '{self.sp}'. Must be one of: {valid_policies}"
+                f"Invalid subdomain policy '{self.sp}'. "
+                f"Must be one of: {valid_policies}"
             )
 
     def _validate_percentage(self) -> None:
@@ -129,7 +133,8 @@ class PolicyEvaluated:
         valid_dispositions = {"none", "quarantine", "reject"}
         if self.disposition not in valid_dispositions:
             raise ValueError(
-                f"Invalid disposition '{self.disposition}'. Must be one of: {valid_dispositions}"
+                f"Invalid disposition '{self.disposition}'. "
+                f"Must be one of: {valid_dispositions}"
             )
 
     def _validate_auth_results(self) -> None:

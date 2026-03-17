@@ -15,10 +15,7 @@ import email
 import gzip
 import zipfile
 import io
-import tempfile
-import os
-from datetime import datetime
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from hypothesis import given, strategies as st, assume, settings, HealthCheck
 from hypothesis.strategies import composite
 
@@ -28,15 +25,11 @@ from dmarc_lens.utils.email_utils import (
     decompress_attachment,
     extract_dmarc_reports,
     EmailParsingError,
-    AttachmentExtractionError,
     get_email_metadata,
     validate_email_structure,
 )
 from dmarc_lens.lambda_functions.report_parser import (
     process_email_from_s3,
-    parse_dmarc_report_xml,
-    store_dmarc_report,
-    store_failed_report,
 )
 
 
@@ -147,9 +140,12 @@ def email_with_dmarc_attachment(draw):
     msg["To"] = to_addr
     msg["Subject"] = subject
     msg["Date"] = email.utils.formatdate(localtime=True)
-    msg["Message-ID"] = (
-        f"<{draw(st.text(alphabet='abcdefghijklmnopqrstuvwxyz0123456789', min_size=10, max_size=20))}@example.com>"
-    )
+    msg_id_local = draw(st.text(
+        alphabet='abcdefghijklmnopqrstuvwxyz0123456789',
+        min_size=10,
+        max_size=20,
+    ))
+    msg["Message-ID"] = f"<{msg_id_local}@example.com>"
 
     # Add text body
     msg.set_content("This is a DMARC aggregate report.")
@@ -264,11 +260,12 @@ class TestEmailStorageAndOrganization:
         """
         email_content, expected_xml, filename = email_data
 
-        with patch(
-            "dmarc_lens.lambda_functions.report_parser.s3_client"
-        ) as mock_s3, patch(
-            "dmarc_lens.lambda_functions.report_parser.dynamodb"
-        ) as mock_dynamodb:
+        with (
+            patch("dmarc_lens.lambda_functions.report_parser.s3_client") as mock_s3,
+            patch(
+                "dmarc_lens.lambda_functions.report_parser.dynamodb"
+            ) as mock_dynamodb,
+        ):
 
             # Mock S3 response
             mock_s3.get_object.return_value = {
@@ -449,11 +446,12 @@ class TestParserErrorHandling:
         """
         email_content, expected_xml, filename = email_data
 
-        with patch(
-            "dmarc_lens.lambda_functions.report_parser.s3_client"
-        ) as mock_s3, patch(
-            "dmarc_lens.lambda_functions.report_parser.dynamodb"
-        ) as mock_dynamodb:
+        with (
+            patch("dmarc_lens.lambda_functions.report_parser.s3_client") as mock_s3,
+            patch(
+                "dmarc_lens.lambda_functions.report_parser.dynamodb"
+            ) as mock_dynamodb,
+        ):
 
             # Mock S3 response
             mock_s3.get_object.return_value = {

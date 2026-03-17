@@ -13,7 +13,7 @@ import xml.etree.ElementTree as ET
 import boto3
 import traceback
 from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 from botocore.exceptions import ClientError
 
 from ..models.dmarc_models import (
@@ -35,7 +35,6 @@ from ..utils.email_utils import (
 from ..utils.xml_utils import (
     parse_xml_string,
     validate_dmarc_xml_structure,
-    XMLValidationError,
     XMLParsingError,
     extract_xml_text,
     extract_xml_int,
@@ -427,7 +426,8 @@ def store_dmarc_report(
             table.put_item(Item=item)
 
         logger.info(
-            f"Stored {len(report.records)} records for report {report.metadata.report_id}"
+            f"Stored {len(report.records)} records for "
+            f"report {report.metadata.report_id}"
         )
 
     except Exception as e:

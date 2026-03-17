@@ -11,10 +11,7 @@ and security issue detection.
 **Validates: Requirements 3.1, 3.2, 3.3, 3.4, 3.5**
 """
 
-import pytest
-from datetime import datetime, timedelta
-from decimal import Decimal
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from hypothesis import given, strategies as st, assume, settings, HealthCheck
 from hypothesis.strategies import composite
 from collections import defaultdict

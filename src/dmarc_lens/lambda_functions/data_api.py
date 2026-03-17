@@ -15,8 +15,7 @@ import logging
 import os
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Dict, List, Any, Optional, Tuple
-from urllib.parse import parse_qs
+from typing import Dict, List, Any
 from collections import defaultdict
 
 import boto3
@@ -330,21 +329,31 @@ def handle_get_analysis(domain: str, query_params: Dict[str, str]) -> Dict[str, 
         latest = items[0]
 
         # Extract top_sources from failure_analysis
-        failure_analysis: Dict[str, Any] = latest.get("failure_analysis", {})  # type: ignore[assignment]
-        top_failing_ips: List[Dict[str, Any]] = failure_analysis.get("top_failing_ips", [])  # type: ignore[assignment]
+        failure_analysis: Dict[str, Any] = latest.get(
+            "failure_analysis", {}
+        )  # type: ignore[assignment]
+        top_failing_ips: List[Dict[str, Any]] = failure_analysis.get(
+            "top_failing_ips", []
+        )  # type: ignore[assignment]
         top_sources = [
             entry.get("ip", "") for entry in top_failing_ips if entry.get("ip")
         ]
 
         # Flatten failure_reasons
-        failure_patterns: Dict[str, Any] = failure_analysis.get("failure_patterns", {})  # type: ignore[assignment]
-        failure_sources: Dict[str, Any] = failure_analysis.get("failure_sources", {})  # type: ignore[assignment]
+        failure_patterns: Dict[str, Any] = failure_analysis.get(
+            "failure_patterns", {}
+        )  # type: ignore[assignment]
+        failure_sources: Dict[str, Any] = failure_analysis.get(
+            "failure_sources", {}
+        )  # type: ignore[assignment]
         failure_reasons: Dict[str, Any] = {}
         failure_reasons.update(failure_patterns)
         failure_reasons.update(failure_sources)
 
         # Extract recommendation titles
-        raw_recommendations: List[Any] = latest.get("recommendations", [])  # type: ignore[assignment]
+        raw_recommendations: List[Any] = latest.get(
+            "recommendations", []
+        )  # type: ignore[assignment]
         recommendations = [
             rec.get("title", "") if isinstance(rec, dict) else str(rec)
             for rec in raw_recommendations
@@ -356,13 +365,19 @@ def handle_get_analysis(domain: str, query_params: Dict[str, str]) -> Dict[str, 
             date = str(item.get("analysis_date", ""))
             rate = item.get("auth_success_rate", 0)
             if date:
-                trend_data[date] = float(rate) if isinstance(rate, Decimal) else rate  # type: ignore[arg-type]
+                trend_data[date] = (
+                    float(rate)
+                    if isinstance(rate, Decimal)
+                    else rate
+                )  # type: ignore[arg-type]
 
         result = {
             "domain": domain,
             "analysis_date": latest.get("analysis_date", ""),
             "total_messages": latest.get("total_messages", 0),
-            "auth_success_rate": float(latest.get("auth_success_rate", 0)),  # type: ignore[arg-type]
+            "auth_success_rate": float(
+                latest.get("auth_success_rate", 0)
+            ),  # type: ignore[arg-type]
             "top_sources": top_sources,
             "failure_reasons": failure_reasons,
             "recommendations": recommendations,
@@ -397,7 +412,10 @@ def handle_get_dashboard(query_params: Dict[str, str]) -> Dict[str, Any]:
         reports_data: List[Dict[str, Any]] = []
         scan_kwargs: Dict[str, Any] = {
             "FilterExpression": Attr("date_range_begin").gte(start_timestamp),
-            "ProjectionExpression": "report_id, domain, #count, disposition, dkim_result, spf_result, date_range_begin",
+            "ProjectionExpression": (
+                "report_id, domain, #count, disposition,"
+                " dkim_result, spf_result, date_range_begin"
+            ),
             "ExpressionAttributeNames": {"#count": "count"},
             "Limit": 1000,
         }
@@ -596,7 +614,10 @@ def handle_export_report(
                 "statusCode": 200,
                 "headers": {
                     "Content-Type": "text/csv",
-                    "Content-Disposition": f'attachment; filename="dmarc-report-{report_id}.csv"',
+                    "Content-Disposition": (
+                        f'attachment; filename="dmarc-report-'
+                        f'{report_id}.csv"'
+                    ),
                     "Access-Control-Allow-Origin": cors_origin,
                     "Access-Control-Allow-Headers": "Content-Type,Authorization",
                     "Access-Control-Allow-Methods": "GET,OPTIONS",
@@ -610,7 +631,10 @@ def handle_export_report(
                 "statusCode": 200,
                 "headers": {
                     "Content-Type": "application/json",
-                    "Content-Disposition": f'attachment; filename="dmarc-report-{report_id}.json"',
+                    "Content-Disposition": (
+                        f'attachment; filename="dmarc-report-'
+                        f'{report_id}.json"'
+                    ),
                     "Access-Control-Allow-Origin": cors_origin,
                     "Access-Control-Allow-Headers": "Content-Type,Authorization",
                     "Access-Control-Allow-Methods": "GET,OPTIONS",
