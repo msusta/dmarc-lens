@@ -1,6 +1,6 @@
 # Makefile for DMARC Lens development
 
-.PHONY: help setup install test lint format type-check clean deploy destroy
+.PHONY: help install test lint format format-check type-check ci clean deploy destroy
 
 # Default target
 help:
@@ -8,14 +8,15 @@ help:
 	@echo "==============================="
 	@echo ""
 	@echo "Setup Commands:"
-	@echo "  setup          Set up development environment"
-	@echo "  install        Install dependencies"
+	@echo "  install        Install all dependencies"
 	@echo ""
 	@echo "Development Commands:"
 	@echo "  test           Run all tests"
 	@echo "  lint           Run code linting"
 	@echo "  format         Format code with black"
+	@echo "  format-check   Check code formatting"
 	@echo "  type-check     Run type checking with mypy"
+	@echo "  ci             Run all CI checks locally"
 	@echo ""
 	@echo "Infrastructure Commands:"
 	@echo "  deploy         Deploy infrastructure to AWS"
@@ -24,47 +25,49 @@ help:
 	@echo "Utility Commands:"
 	@echo "  clean          Clean build artifacts"
 
-# Setup development environment
-setup:
-	@echo "Setting up development environment..."
-	@./scripts/setup-dev.sh
-
 # Install dependencies
 install:
 	@echo "Installing dependencies..."
-	@source venv/bin/activate && pip install -r requirements-dev.txt
-	@source venv/bin/activate && pip install -r requirements-cdk.txt
-	@source venv/bin/activate && pip install -e .
+	uv sync --group dev --group cdk
 
 # Run tests
 test:
 	@echo "Running tests..."
-	@source venv/bin/activate && pytest
+	uv run pytest
 
 # Run linting
 lint:
 	@echo "Running linting..."
-	@source venv/bin/activate && flake8 src/ tests/
+	uv run flake8 src/ tests/
 
 # Format code
 format:
 	@echo "Formatting code..."
-	@source venv/bin/activate && black src/ tests/
+	uv run black src/ tests/
+
+# Check code formatting
+format-check:
+	@echo "Checking code formatting..."
+	uv run black --check src/ tests/
 
 # Type checking
 type-check:
 	@echo "Running type checking..."
-	@source venv/bin/activate && mypy src/
+	uv run mypy src/dmarc_lens --ignore-missing-imports
+
+# Run all CI checks locally
+ci: lint format-check type-check test
+	@echo "All CI checks passed!"
 
 # Deploy infrastructure
 deploy:
 	@echo "Deploying infrastructure..."
-	@cd infrastructure && ../scripts/deploy.sh
+	cd infrastructure && npx cdk deploy --all
 
 # Destroy infrastructure
 destroy:
 	@echo "Destroying infrastructure..."
-	@cd infrastructure && source ../venv/bin/activate && npx cdk destroy
+	cd infrastructure && npx cdk destroy --all
 
 # Clean build artifacts
 clean:

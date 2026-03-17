@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '18'
+
+jobs:
+  # Tier 1: Fast checks (~30s, all parallel)
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: uv sync --group dev
+      - run: uv run flake8 src/ tests/
+
+  format-check:
+    name: Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: uv sync --group dev
+      - run: uv run black --check src/ tests/
+
+  typecheck:
+    name: Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: uv sync --group dev
+      - run: uv run mypy src/dmarc_lens --ignore-missing-imports
+
+  # Tier 2: Medium checks (~1-2min, parallel, needs Tier 1)
+  python-tests:
+    name: Python Tests
+    runs-on: ubuntu-latest
+    needs: [lint, format-check, typecheck]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: uv sync --group dev
+      - name: Run tests with coverage
+        run: uv run python -m pytest tests/ -v --override-ini="addopts=" --cov=src/dmarc_lens --cov-report=xml
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+
+  frontend-build:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+    needs: [lint, format-check, typecheck]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: cd web && npm ci
+      - run: cd web && npm run build
+
+  # Tier 3: Heavier checks (needs frontend-build)
+  frontend-tests:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    needs: [frontend-build]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: cd web && npm ci
+      - run: cd web && npm test -- --watchAll=false
